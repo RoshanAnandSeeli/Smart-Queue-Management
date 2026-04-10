@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+parking_system.log
+.DS_Store
+.vscode/
