@@ -1,464 +1,283 @@
-import os
-import logging
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 import requests
-import hashlib
-from datetime import datetime
-from flask import Flask, jsonify, render_template
-from dotenv import load_dotenv
-
-load_dotenv()
-
-# ========== LOGGING CONFIGURATION ==========
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("parking_system.log"),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
+import json
+import time
+import threading
+import uuid
+import os
 app = Flask(__name__)
+app.secret_key = "any_secret_password" 
 
-# ========== CONFIGURATION ==========
-TS_READ_KEY   = os.environ.get("THINGSPEAK_READ_KEY",  "<your_read_key>")
-TS_CHANNEL_ID = os.environ.get("THINGSPEAK_CHANNEL_ID", "<your_channel_id>")
+# --- CONFIGURAxTION ---
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
 
-ANOMALY_THRESHOLD = 20
-MAX_VEHICLE_COUNT = 100  # Sanity check: max reasonable vehicle count
-MIN_VEHICLE_COUNT = 0
-REQUEST_TIMEOUT = 10
-CACHE_DURATION = 5  # seconds (ThingSpeak rate limited to 15/min)
+queue_data = {
+    "queue_id": uuid.uuid4().hex[:8].upper(),  # Unique ID for this queue instance
+    "current_serving": 1,
+    "last_token_issued": 1,
+    "last_click_time": None,
+    "service_history": [300],
+    "user_satisfaction_scores": {},
+    "users": {},
+    "eta_offsets": {},
+    "discounts": {},
+    "game_scores": {}          # {"2": {"score": 45, "playing": True}}
+}
 
-
-def safe_int(value, default=0, min_val=None, max_val=None):
-    """
-    Convert a value to int safely, returning default on failure.
-    
-    Args:
-        value: Value to convert
-        default: Default value if conversion fails
-        min_val: Minimum acceptable value (None to skip)
-        max_val: Maximum acceptable value (None to skip)
-    
-    Returns:
-        int: Converted value or default
-    """
-    try:
-        result = int(float(value))
-        
-        # Validate bounds
-        if min_val is not None and result < min_val:
-            logger.warning(f"Value {result} below minimum {min_val}, using default {default}")
-            return default
-        if max_val is not None and result > max_val:
-            logger.warning(f"Value {result} exceeds maximum {max_val}, using default {default}")
-            return default
-            
-        return result
-    except (TypeError, ValueError):
-        logger.debug(f"Failed to convert {value!r} to int, using default {default}")
-        return default
-
-
-def format_timestamp(raw_timestamp):
-    """Convert an ISO timestamp into a clean human-readable format."""
-    if not raw_timestamp:
-        return None
-    try:
-        dt = datetime.fromisoformat(raw_timestamp.replace("Z", "+00:00"))
-        return dt.astimezone().strftime("%b %d, %Y %H:%M:%S")
-    except Exception:
-        return raw_timestamp
-
-
-class DataValidator:
-    """Validates and cleans ThingSpeak data."""
-    
-    @staticmethod
-    def validate_vehicle_count(count):
-        """Validate vehicle count is within acceptable range."""
-        return safe_int(count, default=0, min_val=MIN_VEHICLE_COUNT, max_val=MAX_VEHICLE_COUNT)
-    
-    @staticmethod
-    def validate_ai_decision(decision):
-        """Validate AI decision is 0 or 1."""
-        val = safe_int(decision, default=0)
-        return 1 if val == 1 else 0
-    
-    @staticmethod
-    def validate_feed(feed):
-        """
-        Validate and extract required fields from ThingSpeak feed.
-        
-        Args:
-            feed: Feed dict from ThingSpeak
-        
-        Returns:
-            dict: Cleaned feed data or None if invalid
-        """
-        try:
-            if not isinstance(feed, dict):
-                logger.warning("Feed is not a dict, skipping")
-                return None
-            
-            vehicle_count = DataValidator.validate_vehicle_count(feed.get("field3"))
-            ai_decision = DataValidator.validate_ai_decision(feed.get("field4"))
-            
-            # Hash the entry_id for blockchain-like security
-            entry_id = feed.get("entry_id")
-            if entry_id:
-                hashed_entry_id = hashlib.sha256(str(entry_id).encode()).hexdigest()
-                # Create display version: first 2 chars + ... + last 2 chars
-                display_entry_id = f"{hashed_entry_id[:2]}...{hashed_entry_id[-2:]}"
-            else:
-                hashed_entry_id = None
-                display_entry_id = None
-            
-            return {
-                "entry_id":      hashed_entry_id,
-                "display_entry_id": display_entry_id,
-                "serial_number": entry_id,  # Original ThingSpeak entry ID for display
-                "created_at":    format_timestamp(feed.get("created_at")),
-                "vehicle_count": vehicle_count,
-                "ai_decision":   ai_decision,
-                "timestamp":     feed.get("created_at"),
-            }
-        except Exception as e:
-            logger.warning(f"Failed to validate feed: {e}")
-            return None
-
-
-def compute_statistics(vehicle_counts):
-    """
-    Compute statistics from vehicle counts.
-    
-    Args:
-        vehicle_counts: List of vehicle counts
-    
-    Returns:
-        dict: Statistics including average, min, max, median
-    """
-    if not vehicle_counts:
-        return {
-            "average": 0,
-            "min": 0,
-            "max": 0,
-            "median": 0,
-            "trend": "stable",
-        }
-    
-    sorted_counts = sorted(vehicle_counts)
-    avg = sum(vehicle_counts) / len(vehicle_counts)
-    min_val = min(vehicle_counts)
-    max_val = max(vehicle_counts)
-    
-    # Calculate median
-    n = len(vehicle_counts)
-    median = (sorted_counts[n // 2 - 1] + sorted_counts[n // 2]) / 2 if n % 2 == 0 else sorted_counts[n // 2]
-    
-    # Simple trend detection (first vs last)
-    trend = "increasing" if vehicle_counts[-1] > vehicle_counts[0] else "decreasing" if vehicle_counts[-1] < vehicle_counts[0] else "stable"
-    
-    return {
-        "average": round(avg, 2),
-        "min": min_val,
-        "max": max_val,
-        "median": round(median, 2),
-        "trend": trend,
+# --- AI LOGIC ---
+def get_goodbye_message(name):
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [
+            {"role": "system", "content": "You are a warm, supportive queue assistant. Be encouraging and helpful. Speak JSON."},
+            {"role": "user", "content": f"The customer named {name} has reached the counter after waiting. Give them a warm, encouraging message thanking them for their patience and wishing them well. Format as JSON: {{\"text\": \"your message\"}}"}
+        ],
+        "response_format": {"type": "json_object"}
     }
-
-
-# ========== THINGSPEAK DATA FETCHING ==========
-_cache = {"data": None, "timestamp": None}
-
-
-def get_thingspeak_data(use_cache=True):
-    """
-    Fetch and validate last 5 entries from ThingSpeak.
-    
-    Includes:
-    - Data validation and cleaning
-    - Anomaly detection
-    - Statistical analysis
-    - Robust error handling
-    - Optional caching
-    
-    Args:
-        use_cache: Whether to use cached data if recent
-    
-    Returns:
-        dict: Structured response with status, counts, statistics, and error info
-    """
     try:
-        # Check cache
-        if use_cache and _cache["data"] and _cache["timestamp"]:
-            age = (datetime.now() - _cache["timestamp"]).total_seconds()
-            if age < CACHE_DURATION:
-                logger.debug(f"Returning cached data (age: {age:.1f}s)")
-                return _cache["data"]
-        
-        logger.info("Fetching ThingSpeak data...")
-        url = f"https://api.thingspeak.com/channels/{TS_CHANNEL_ID}/feeds.json"
-        response = requests.get(
-            url,
-            params={"api_key": TS_READ_KEY, "results": 5},
-            timeout=REQUEST_TIMEOUT
-        )
-        response.raise_for_status()
-        
-        feeds = response.json().get("feeds", [])
-        
-        if not feeds:
-            logger.warning("No feeds returned from ThingSpeak")
-            raise ValueError("No feeds returned from ThingSpeak.")
-        
-        logger.info(f"Received {len(feeds)} feeds from ThingSpeak")
-        
-        # Validate and clean all feeds
-        validator = DataValidator()
-        history = []
-        for feed in feeds:
-            cleaned = validator.validate_feed(feed)
-            if cleaned:
-                history.append(cleaned)
-        
-        if not history:
-            logger.error("No valid feeds after validation")
-            raise ValueError("No valid feeds after data validation.")
-        
-        logger.info(f"Validated {len(history)} feeds")
-        
-        # Extract vehicle counts and AI decisions
-        vehicle_counts = [h["vehicle_count"] for h in history]
-        ai_decisions = [h["ai_decision"] for h in history]
-        
-        # Compute current state
-        latest_vehicle_count = vehicle_counts[-1]
-        latest_ai_decision = ai_decisions[-1]
-        latest_status = "BUSY" if latest_ai_decision == 1 else "FREE"
-        
-        # Compute statistics
-        stats = compute_statistics(vehicle_counts)
-        
-        # Anomaly detection
-        anomaly = latest_vehicle_count > ANOMALY_THRESHOLD
-        if anomaly:
-            logger.warning(f"ANOMALY DETECTED: Vehicle count {latest_vehicle_count} > threshold {ANOMALY_THRESHOLD}")
-        
-        # Build response
-        result = {
-            "timestamp": datetime.now().astimezone().strftime("%b %d, %Y %H:%M:%S"),
-            "vehicle_count": latest_vehicle_count,
-            "status": latest_status,
-            "statistics": stats,
-            "anomaly": anomaly,
-            "anomaly_threshold": ANOMALY_THRESHOLD,
-            "history": history,
-            "error": None,
-        }
-        
-        # Update cache
-        _cache["data"] = result
-        _cache["timestamp"] = datetime.now()
-        
-        logger.info(f"Success: {latest_vehicle_count} vehicles, status={latest_status}, anomaly={anomaly}")
-        return result
-        
-    except requests.exceptions.Timeout:
-        msg = f"ThingSpeak request timed out (timeout={REQUEST_TIMEOUT}s)"
-        logger.error(msg)
-        return _error_response(msg, "TIMEOUT")
-    except requests.exceptions.ConnectionError as e:
-        msg = f"Connection error to ThingSpeak: {e}"
-        logger.error(msg)
-        return _error_response(msg, "CONNECTION_ERROR")
-    except requests.exceptions.HTTPError as e:
-        msg = f"HTTP error from ThingSpeak: {e.response.status_code} - {e}"
-        logger.error(msg)
-        return _error_response(msg, "HTTP_ERROR")
-    except requests.exceptions.RequestException as e:
-        msg = f"ThingSpeak request failed: {e}"
-        logger.error(msg)
-        return _error_response(msg, "REQUEST_ERROR")
-    except ValueError as e:
-        msg = str(e)
-        logger.error(msg)
-        return _error_response(msg, "VALIDATION_ERROR")
-    except Exception as e:
-        msg = f"Unexpected error: {type(e).__name__}: {e}"
-        logger.exception(msg)
-        return _error_response(msg, "UNEXPECTED_ERROR")
+        r = requests.post(url, headers=headers, json=payload)
+        return r.json()['choices'][0]['message']['content']
+    except:
+        return json.dumps({"text": f"Thank you for your patience, {name}! You're all set. Have a great experience with us!"})
 
-
-def _error_response(message, error_code=None):
-    """
-    Return a safe default response dict with error information.
+def get_groq_response(user_choice, queue_pos, token):
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
-    Args:
-        message: Error message
-        error_code: Error category (e.g., TIMEOUT, VALIDATION_ERROR)
+    tone = "encouraging and uplifting" if queue_pos < 3 else "empathetic and supportive"
     
-    Returns:
-        dict: Error response structure
+    prompt = f"""
+    Queue Position: {queue_pos} people ahead. User chose: '{user_choice}'. 
+    Your Tone: Be {tone} and genuinely helpful.
+    Task: Respond with genuine support and helpful suggestions. Rate the user's satisfaction from 1 to 10 based on how well you've supported them.
+    Format ONLY as JSON: 
+    {{
+        "text": "your supportive response", 
+        "options": ["opt1", "opt2", "opt3"],
+        "satisfaction_score": 8
+    }}
     """
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "vehicle_count": None,
-        "status": None,
-        "statistics": {
-            "average": None,
-            "min": None,
-            "max": None,
-            "median": None,
-            "trend": None,
-        },
-        "anomaly": False,
-        "anomaly_threshold": ANOMALY_THRESHOLD,
-        "history": [],
-        "error": message,
-        "error_code": error_code,
+    
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [{"role": "system", "content": "You are a warm, helpful, and supportive queue assistant. Your goal is to make customers feel valued and comfortable while they wait. Speak JSON. Be encouraging and genuinely helpful in every response."},
+                     {"role": "user", "content": prompt}],
+        "response_format": {"type": "json_object"}
     }
-
-
-
-# ========== API ROUTES ==========
-
-@app.route("/", methods=["GET"])
-def dashboard():
-    """
-    Render the Smart Parking Dashboard.
     
-    Returns:
-        HTML: Dashboard page with real-time parking data
-    """
-    logger.info("GET / endpoint called (dashboard)")
     try:
-        data = get_thingspeak_data()
-        return render_template("index.html", data=data)
+        r = requests.post(url, headers=headers, json=payload)
+        res_text = r.json()['choices'][0]['message']['content']
+        data = json.loads(res_text)
+        
+        # Save this specific user's satisfaction score
+        queue_data["user_satisfaction_scores"][str(token)] = data.get("satisfaction_score", 8)
+        return res_text
     except Exception as e:
-        logger.error(f"Error rendering dashboard: {e}")
-        return render_template("index.html", data={
-            "error": "Unable to load dashboard",
-            "vehicle_count": None,
-            "status": None,
-            "statistics": {},
-            "anomaly": False,
-            "history": [],
-        }), 500
+        print(f"AI Error: {e}")
+        return json.dumps({"text": "We're here to help! Your patience means a lot to us. Is there anything we can assist you with while you wait?", "options": ["Play a game", "Learn about services", "Chat"], "satisfaction_score": 7})
 
+# --- PAGE ROUTES ---
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-@app.route("/status", methods=["GET"])
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        if request.form.get('password') == 'admin123':
+            session['admin'] = True
+            return redirect(url_for('admin'))
+    return render_template('login.html')
+
+@app.route('/admin')
+def admin():
+    if not session.get('admin'):
+        return redirect(url_for('login'))
+    return render_template('admin.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('admin', None)
+    return redirect(url_for('login'))
+
+# --- API ENDPOINTS ---
+@app.route('/api/join', methods=['POST'])
+def join_queue():
+    name = request.json.get('name', 'Anonymous')
+    queue_data["last_token_issued"] += 1
+    new_token = queue_data["last_token_issued"]
+    queue_data["users"][str(new_token)] = name
+    # Start the timer on first customer joining
+    if queue_data["last_click_time"] is None:
+        queue_data["last_click_time"] = time.time()
+    return jsonify({"token": new_token, "name": name, "queue_id": queue_data["queue_id"]})
+
+@app.route('/api/status')
 def status():
-    """
-    Get current parking system status.
+    user_token = int(request.args.get('token', 0))
+    ahead = max(0, user_token - queue_data["current_serving"])
+    actual_avg_seconds = sum(queue_data["service_history"]) / len(queue_data["service_history"])
+    base_eta = round((ahead * actual_avg_seconds) / 60, 1)
+    offset = queue_data["eta_offsets"].get(str(user_token), 0)
+    dynamic_eta = round(max(0, base_eta + offset), 1)
+
+    current_satisfaction = queue_data["user_satisfaction_scores"].get(str(queue_data["current_serving"]), 8)
+    user_satisfaction = queue_data["user_satisfaction_scores"].get(str(user_token), 8)
+    has_queue = queue_data["last_token_issued"] > queue_data["current_serving"]
+    elapsed = round(time.time() - queue_data["last_click_time"], 1) if (queue_data["last_click_time"] and has_queue) else None
+
+    return jsonify({
+        "current": queue_data["current_serving"],
+        "last_token": queue_data["last_token_issued"],
+        "avg_seconds": round(actual_avg_seconds, 1),
+        "eta": dynamic_eta,
+        "satisfaction": user_satisfaction,
+        "current_satisfaction": current_satisfaction,
+        "discount": queue_data["discounts"].get(str(user_token), None),
+        "elapsed_seconds": elapsed,
+        "serving_token": queue_data["current_serving"],
+        "queue_id": queue_data["queue_id"]
+    })
+
+@app.route('/api/queue_list')
+def queue_list():
+    if not session.get('admin'):
+        return "Unauthorized", 403
+    actual_avg_seconds = sum(queue_data["service_history"]) / len(queue_data["service_history"])
+    members = []
+    for token_str, name in queue_data["users"].items():
+        t = int(token_str)
+        if t < queue_data["current_serving"]:
+            continue  # already served
+        ahead = max(0, t - queue_data["current_serving"])
+        base_eta = round((ahead * actual_avg_seconds) / 60, 1)
+        offset = queue_data["eta_offsets"].get(token_str, 0)
+        eta = round(max(0, base_eta + offset), 1)
+        members.append({
+            "token": t,
+            "name": name,
+            "satisfaction": queue_data["user_satisfaction_scores"].get(token_str, 8),
+            "eta": eta,
+            "is_current": t == queue_data["current_serving"],
+            "game": queue_data["game_scores"].get(token_str, None),
+            "queue_id": queue_data["queue_id"]
+        })
+    members.sort(key=lambda x: x["token"])
+    return jsonify({"members": members, "queue_id": queue_data["queue_id"]})
+
+@app.route('/api/adjust_eta', methods=['POST'])
+def adjust_eta():
+    if not session.get('admin'):
+        return "Unauthorized", 403
+    token = str(request.json.get('token'))
+    delta = float(request.json.get('delta', 0))
+    current = queue_data["eta_offsets"].get(token, 0)
+    queue_data["eta_offsets"][token] = current + delta
+    return jsonify({"success": True})
+
+@app.route('/api/game_score', methods=['POST'])
+def game_score():
+    token = str(request.json.get('token'))
+    score = int(request.json.get('score', 0))
+    playing = bool(request.json.get('playing', False))
+    queue_data["game_scores"][token] = {"score": score, "playing": playing}
+    # Auto-discount at score >= 200 (hard to reach, ~40 apples)
+    DISCOUNT_THRESHOLD = 200
+    if score >= DISCOUNT_THRESHOLD and token not in queue_data["discounts"]:
+        queue_data["discounts"][token] = 10  # reward: 10% off
+    return jsonify({"success": True, "discount_threshold": DISCOUNT_THRESHOLD})
+
+@app.route('/api/adjust_avg', methods=['POST'])
+def adjust_avg():
+    if not session.get('admin'):
+        return "Unauthorized", 403
+    delta_seconds = float(request.json.get('delta', 0))  # +30 or -30
+    # Inject a synthetic history entry to nudge the rolling average
+    current_avg = sum(queue_data["service_history"]) / len(queue_data["service_history"])
+    new_val = max(30, current_avg + delta_seconds)
+    queue_data["service_history"].append(new_val)
+    if len(queue_data["service_history"]) > 5:
+        queue_data["service_history"].pop(0)
+    return jsonify({"avg_seconds": round(sum(queue_data["service_history"]) / len(queue_data["service_history"]), 1)})
+
+@app.route('/api/apply_discount', methods=['POST'])
+def apply_discount():
+    if not session.get('admin'):
+        return "Unauthorized", 403
+    token = str(request.json.get('token'))
+    percent = int(request.json.get('percent'))
+    queue_data["discounts"][token] = percent
+    return jsonify({"success": True})
+
+@app.route('/api/goodbye', methods=['POST'])
+def goodbye():
+    token = str(request.json.get('token'))
+    name = queue_data["users"].get(token, "friend")
+    return get_goodbye_message(name)
+
+@app.route('/api/interact', methods=['POST'])
+def interact():
+    data = request.json
+    choice = data.get('choice')
+    token = str(data.get('token'))
+    pos = int(token) - queue_data["current_serving"]
+    return get_groq_response(choice, pos, token)
+
+@app.route('/api/next', methods=['POST'])
+def next_queue():
+    if not session.get('admin'):
+        return "Unauthorized", 403
     
-    Returns:
-        JSON: {
-            "timestamp": ISO 8601 timestamp,
-            "vehicle_count": Current number of vehicles,
-            "status": "BUSY" or "FREE",
-            "statistics": {
-                "average": Average count in last 5 entries,
-                "min": Minimum count,
-                "max": Maximum count,
-                "median": Median count,
-                "trend": "increasing", "decreasing", or "stable"
-            },
-            "anomaly": Boolean indicating if anomaly detected,
-            "anomaly_threshold": Threshold value,
-            "history": Array of last 5 entries,
-            "error": Error message (null if successful),
-            "error_code": Error category (null if successful)
-        }
-    """
-    logger.info("GET /status endpoint called")
-    data = get_thingspeak_data()
-    code = 200 if data["error"] is None else 502
-    return jsonify(data), code
-
-
-@app.route("/status/detailed", methods=["GET"])
-def status_detailed():
-    """
-    Get detailed parking system status with analysis.
-    Same as /status but with additional analysis hints.
+    now = time.time()
+    if queue_data["last_click_time"]:
+        duration = now - queue_data["last_click_time"]
+        queue_data["service_history"].append(duration)
+        if len(queue_data["service_history"]) > 5:
+            queue_data["service_history"].pop(0)
     
-    Returns:
-        JSON: Same as /status with added analysis
-    """
-    logger.info("GET /status/detailed endpoint called")
-    data = get_thingspeak_data()
-    
-    if data["error"] is None:
-        # Add analysis
-        stats = data["statistics"]
-        vehicle_count = data["vehicle_count"]
-        
-        analysis = {
-            "is_full": vehicle_count > stats["average"] * 1.5,
-            "occupancy_level": round((vehicle_count / 100) * 100, 1),  # percentage if max is 100
-            "capacity_warning": data["anomaly"],
-            "trend_direction": stats["trend"],
-        }
-        data["analysis"] = analysis
-    
-    code = 200 if data["error"] is None else 502
-    return jsonify(data), code
+    queue_data["last_click_time"] = now
+    queue_data["current_serving"] += 1
+    return jsonify({"success": True})
 
+# --- AUTO-ADVANCE BACKGROUND THREAD ---
+def auto_advance_worker():
+    while True:
+        time.sleep(10)  # check every 10 seconds
+        try:
+            current = queue_data["current_serving"]
+            last = queue_data["last_token_issued"]
+            if current > last:
+                continue  # no one waiting
 
-@app.route("/health", methods=["GET"])
-def health():
-    """
-    Health check endpoint.
-    
-    Returns:
-        JSON: {"ok": true} with 200 status
-    """
-    logger.debug("GET /health endpoint called")
-    return jsonify({"ok": True, "timestamp": datetime.now().isoformat()}), 200
+            actual_avg_seconds = sum(queue_data["service_history"]) / len(queue_data["service_history"])
+            offset = queue_data["eta_offsets"].get(str(current), 0)
+            # ETA for the person AT the counter is 0 by definition;
+            # we track how long they've been sitting there instead
+            if queue_data["last_click_time"] is None:
+                continue
+            time_at_counter = time.time() - queue_data["last_click_time"]
+            allowed_seconds = actual_avg_seconds + (offset * 60)
+            if time_at_counter >= allowed_seconds:
+                # Auto-advance
+                now = time.time()
+                duration = now - queue_data["last_click_time"]
+                queue_data["service_history"].append(duration)
+                if len(queue_data["service_history"]) > 5:
+                    queue_data["service_history"].pop(0)
+                queue_data["last_click_time"] = now
+                queue_data["current_serving"] += 1
+                print(f"[Auto-Advance] Token {current} timed out. Now serving {queue_data['current_serving']}")
+        except Exception as e:
+            print(f"[Auto-Advance Error] {e}")
 
+auto_thread = threading.Thread(target=auto_advance_worker, daemon=True)
+auto_thread.start()
 
-@app.route("/cache/clear", methods=["POST"])
-def clear_cache():
-    """
-    Clear the internal data cache (debugging endpoint).
-    
-    Returns:
-        JSON: {"cleared": true}
-    """
-    global _cache
-    _cache = {"data": None, "timestamp": None}
-    logger.info("Cache cleared via API")
-    return jsonify({"cleared": True, "timestamp": datetime.now().isoformat()}), 200
-
-
-@app.errorhandler(404)
-def not_found(error):
-    """Handle 404 errors."""
-    logger.warning(f"404 Not Found: {error}")
-    return jsonify({"error": "Endpoint not found"}), 404
-
-
-@app.errorhandler(500)
-def internal_error(error):
-    """Handle 500 errors."""
-    logger.error(f"500 Internal Error: {error}")
-    return jsonify({"error": "Internal server error"}), 500
-
-
-# ========== APPLICATION ENTRY POINT ==========
-
-if __name__ == "__main__":
-    logger.info("=" * 50)
-    logger.info("Smart Parking System Flask Backend Starting")
-    logger.info("=" * 50)
-    logger.info(f"ThingSpeak Channel: {TS_CHANNEL_ID}")
-    logger.info(f"Anomaly Threshold: {ANOMALY_THRESHOLD} vehicles")
-    logger.info(f"Max Safe Count: {MAX_VEHICLE_COUNT} vehicles")
-    logger.info(f"Cache Duration: {CACHE_DURATION}s")
-    logger.info("=" * 50)
-    
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+# --- START SERVER (Always at the very bottom) ---
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    debug_mode = os.environ.get('FLASK_ENV') == 'development'
+    app.run(host='0.0.0.0', port=port, debug=debug_mode, use_reloader=False)

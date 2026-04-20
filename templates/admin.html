@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>SmartQ | Admin</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            --bg: #f0f4f8; --card: #ffffff; --text: #1a202c; --sub: #718096;
+            --primary: #00b894; --danger: #e53e3e; --warn: #dd6b20;
+            --border: rgba(0,0,0,0.08); --shadow: 0 4px 24px rgba(0,0,0,0.08);
+        }
+        [data-theme="dark"] {
+            --bg: #0d1117; --card: #161b22; --text: #e6edf3; --sub: #8b949e;
+            --primary: #39d353; --danger: #f85149; --warn: #f0883e;
+            --border: rgba(255,255,255,0.08); --shadow: 0 4px 24px rgba(0,0,0,0.4);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body {
+            background: var(--bg); color: var(--text);
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            min-height: 100dvh; padding: 20px;
+            padding-top: max(20px, env(safe-area-inset-top));
+            padding-bottom: max(20px, env(safe-area-inset-bottom));
+            transition: background 0.4s, color 0.4s;
+        }
+        [data-theme="dark"] body { background: radial-gradient(ellipse at top, #0d1117 0%, #090c10 100%); }
+
+        .container { max-width: 960px; margin: 0 auto; }
+
+        /* Header */
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 28px; padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 12px var(--primary); animation: pulse-dot 2s infinite; }
+        @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(1.4)} }
+        .header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+        .theme-btn { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 1rem; color: var(--text); transition: 0.2s; }
+        .theme-btn:hover { border-color: var(--primary); }
+
+        /* Stats */
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+        .stat-card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 14px; padding: 20px; text-align: center;
+            box-shadow: var(--shadow); transition: transform 0.2s;
+            animation: slideUp 0.4s ease both;
+        }
+        @media (hover: hover) { .stat-card:hover { transform: translateY(-2px); } }
+        .stat-card:nth-child(1) { animation-delay: 0.05s; }
+        .stat-card:nth-child(2) { animation-delay: 0.1s; }
+        .stat-card:nth-child(3) { animation-delay: 0.15s; }
+        @keyframes slideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+        .stat-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--sub); }
+        .stat-val { font-size: 2rem; font-weight: 700; color: var(--primary); margin-top: 6px; transition: all 0.3s; }
+
+        /* Countdown timer */
+        .timer-panel {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 14px; padding: 22px 28px; margin-bottom: 20px;
+            box-shadow: var(--shadow); display: flex; align-items: center; gap: 24px;
+            animation: slideUp 0.4s 0.2s ease both;
+        }
+        .timer-ring-wrap { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+        .timer-ring { transform: rotate(-90deg); }
+        .timer-ring-bg { fill: none; stroke: var(--border); stroke-width: 6; }
+        .timer-ring-fill { fill: none; stroke: var(--primary); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke 0.5s; }
+        .timer-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .timer-secs { font-size: 1.3rem; font-weight: 700; line-height: 1; }
+        .timer-slabel { font-size: 0.6rem; color: var(--sub); text-transform: uppercase; letter-spacing: 0.5px; }
+        .timer-info { flex: 1; }
+        .timer-info h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 4px; }
+        .timer-info p { font-size: 0.82rem; color: var(--sub); }
+        .timer-urgent { color: var(--danger) !important; }
+        .timer-adj { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+        .timer-adj-btn { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; width: 36px; height: 36px; cursor: pointer; font-size: 16px; font-weight: 700; color: var(--text); touch-action: manipulation; display: flex; align-items: center; justify-content: center; transition: 0.15s; }
+        .timer-adj-btn:active { background: var(--primary); color: #0d1117; border-color: var(--primary); }
+        @media (hover: hover) { .timer-adj-btn:hover { background: var(--primary); color: #0d1117; border-color: var(--primary); } }
+        .timer-avg-label { font-size: 0.75rem; color: var(--sub); }
+
+        /* Sentiment */
+        .panel {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 14px; padding: 22px; margin-bottom: 20px;
+            box-shadow: var(--shadow); animation: slideUp 0.4s 0.25s ease both;
+        }
+        .panel-title { font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--sub); margin-bottom: 14px; }
+        .rage-track { background: var(--border); height: 8px; border-radius: 4px; overflow: hidden; }
+        .rage-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease, background 0.6s; }
+        #sentiment-status { margin-top: 10px; font-size: 0.88rem; font-weight: 500; }
+        #discount-btn { display: none; margin-top: 12px; padding: 8px 18px; background: var(--warn); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: 0.2s; }
+        #discount-btn:hover { opacity: 0.85; }
+
+        /* Call next */
+        .control-panel {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 14px; padding: 28px; text-align: center;
+            box-shadow: var(--shadow); margin-bottom: 20px;
+            animation: slideUp 0.4s 0.3s ease both;
+        }
+        .btn-next {
+            background: linear-gradient(135deg, var(--primary), #00cec9);
+            color: #0d1117; border: none; padding: 20px 44px;
+            font-size: 1.2rem; border-radius: 50px; cursor: pointer;
+            font-weight: 700; transition: 0.3s; letter-spacing: 0.3px;
+            box-shadow: 0 8px 24px rgba(57,211,83,0.25);
+            touch-action: manipulation; min-height: 64px; width: 100%; max-width: 360px;
+        }
+        @media (hover: hover) { .btn-next:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(57,211,83,0.35); } }
+        .btn-next:active { transform: scale(0.97); opacity: 0.9; }
+
+        /* Queue table */
+        .queue-wrap {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 14px; overflow: hidden; margin-bottom: 20px;
+            box-shadow: var(--shadow); animation: slideUp 0.4s 0.35s ease both;
+        }
+        .queue-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .queue-header span { font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--sub); }
+        .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table { width: 100%; border-collapse: collapse; min-width: 520px; }
+        th { text-align: left; padding: 10px 16px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--sub); white-space: nowrap; }
+        td { padding: 14px 16px; font-size: 0.88rem; border-top: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
+        tbody tr { transition: background 0.2s; }
+        tbody tr:hover { background: rgba(255,255,255,0.03); }
+
+        tr.serving { background: rgba(57,211,83,0.06) !important; }
+        tr.rage-high { background: rgba(248,81,73,0.08) !important; box-shadow: inset 3px 0 0 var(--danger); animation: pulse-red 2s infinite; }
+        tr.rage-mid { background: rgba(240,136,62,0.08) !important; box-shadow: inset 3px 0 0 var(--warn); }
+        @keyframes pulse-red { 0%,100%{background:rgba(248,81,73,0.06)!important} 50%{background:rgba(248,81,73,0.14)!important} }
+
+        .token-badge { background: rgba(57,211,83,0.15); color: var(--primary); border-radius: 6px; padding: 3px 9px; font-weight: 700; font-size: 0.82rem; }
+        .serving-tag { font-size: 0.65rem; background: var(--primary); color: #0d1117; border-radius: 4px; padding: 2px 6px; margin-left: 6px; font-weight: 700; vertical-align: middle; }
+
+        .rage-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+        .rage-badge.low { background: rgba(57,211,83,0.12); color: var(--primary); }
+        .rage-badge.mid { background: rgba(240,136,62,0.15); color: var(--warn); }
+        .rage-badge.high { background: rgba(248,81,73,0.15); color: var(--danger); }
+
+        .discount-row-btn { margin-top: 6px; display: block; padding: 7px 12px; background: var(--warn); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 600; transition: 0.15s; touch-action: manipulation; min-height: 36px; }
+        .discount-row-btn:active { opacity: 0.75; }
+        .discount-row-btn.sent { background: var(--sub); cursor: default; }
+
+        .eta-cell { font-weight: 600; font-variant-numeric: tabular-nums; }
+        .eta-controls { display: flex; align-items: center; gap: 8px; }
+        .eta-btn { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; width: 44px; height: 44px; cursor: pointer; font-size: 20px; font-weight: 700; color: var(--text); transition: 0.15s; touch-action: manipulation; display: flex; align-items: center; justify-content: center; }
+        @media (hover: hover) { .eta-btn:hover { background: var(--primary); color: #0d1117; border-color: var(--primary); } }
+        .eta-btn:active { background: var(--primary); color: #0d1117; border-color: var(--primary); transform: scale(0.9); }
+
+        .game-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; background: rgba(162,155,254,0.15); color: #a29bfe; }
+        .game-badge.playing { animation: pulse-game 1.2s infinite; }
+        @keyframes pulse-game { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+        /* Empty queue celebration */
+        .empty-state { padding: 40px 20px; text-align: center; }
+        .empty-icon { font-size: 3rem; display: block; animation: floatIcon 3s ease-in-out infinite; }
+        @keyframes floatIcon { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+        .empty-title { font-size: 1rem; font-weight: 700; margin: 12px 0 6px; color: var(--primary); }
+        .empty-sub { font-size: 0.82rem; color: var(--sub); }
+        .empty-particles { position: relative; height: 32px; overflow: hidden; margin: 8px 0; }
+        .particle { position: absolute; width: 6px; height: 6px; border-radius: 50%; animation: fall 1.8s ease-in both; }
+        @keyframes fall { 0%{transform:translateY(-10px) rotate(0deg);opacity:1} 100%{transform:translateY(40px) rotate(360deg);opacity:0} }
+
+        /* Discount modal */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; }
+        .modal-overlay.open { display: flex; animation: fadeIn 0.2s ease; }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        .modal { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 32px 24px; width: min(380px, 92vw); text-align: center; box-shadow: 0 24px 64px rgba(0,0,0,0.5); animation: modalPop 0.25s ease; }
+        @keyframes modalPop { from{transform:scale(0.9);opacity:0} to{transform:scale(1);opacity:1} }
+        .modal h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 6px; }
+        .modal-sub { font-size: 0.82rem; color: var(--sub); margin-bottom: 22px; }
+        .discount-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .d-tile { background: var(--bg); border: 2px solid var(--border); border-radius: 14px; padding: 20px 10px; cursor: pointer; transition: 0.2s; position: relative; touch-action: manipulation; min-height: 90px; }
+        @media (hover: hover) { .d-tile:hover { border-color: var(--primary); transform: translateY(-3px); box-shadow: 0 8px 20px rgba(57,211,83,0.15); } }
+        .d-tile:active { transform: scale(0.96); opacity: 0.85; }
+        .d-tile .pct { font-size: 2rem; font-weight: 800; color: var(--primary); }
+        .d-tile .lbl { font-size: 0.72rem; color: var(--sub); margin-top: 4px; }
+        .d-tile.recommended { border-color: var(--warn); }
+        .d-tile.recommended:hover { box-shadow: 0 8px 20px rgba(240,136,62,0.2); }
+        .rec-tag { position: absolute; top: -11px; left: 50%; transform: translateX(-50%); background: var(--warn); color: white; font-size: 0.62rem; font-weight: 700; padding: 2px 10px; border-radius: 10px; white-space: nowrap; }
+        .modal-cancel { margin-top: 18px; background: none; border: none; color: var(--sub); cursor: pointer; font-size: 0.82rem; transition: 0.2s; }
+        .modal-cancel:hover { color: var(--text); }
+
+        .qr-panel {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 14px; padding: 22px; margin-bottom: 20px;
+            box-shadow: var(--shadow); animation: slideUp 0.4s 0.38s ease both;
+            display: flex; align-items: center; gap: 24px;
+        }
+        .qr-box { background: white; border-radius: 10px; padding: 10px; flex-shrink: 0; }
+        .qr-info h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; }
+        .qr-info p { font-size: 0.82rem; color: var(--sub); margin-bottom: 8px; }
+        .qr-url { font-size: 0.75rem; color: var(--primary); word-break: break-all; font-family: monospace; background: var(--bg); padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); }
+        .nav-links a { color: var(--sub); text-decoration: none; font-size: 0.85rem; transition: 0.2s; }
+        .nav-links a:hover { color: var(--text); }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="header">
+        <div class="header-left">
+            <div class="logo-dot"></div>
+            <h1>Queue Manager</h1>
+            <div style="margin-left:20px; padding-left:20px; border-left:1px solid var(--border); display:flex; align-items:center; gap:8px;">
+                <span style="font-size:0.85rem; color:var(--sub);">Queue ID:</span>
+                <span style="font-size:0.95rem; font-weight:700; color:var(--primary); font-family:monospace;" id="queue-id-header">--</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="theme-btn" onclick="toggleTheme()">🌓</button>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Now Serving</div>
+            <div class="stat-val" id="current">--</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">In Queue</div>
+            <div class="stat-val" id="total-waiting">--</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Avg Speed</div>
+            <div class="stat-val" id="live-speed">--</div>
+        </div>
+    </div>
+
+    <!-- Countdown Timer -->
+    <div class="timer-panel">
+        <div class="timer-ring-wrap">
+            <svg class="timer-ring" width="80" height="80" viewBox="0 0 80 80">
+                <circle class="timer-ring-bg" cx="40" cy="40" r="34"/>
+                <circle class="timer-ring-fill" id="timer-arc" cx="40" cy="40" r="34"
+                    stroke-dasharray="213.6" stroke-dashoffset="0"/>
+            </svg>
+            <div class="timer-center">
+                <span class="timer-secs" id="timer-display">--</span>
+                <span class="timer-slabel">sec</span>
+            </div>
+        </div>
+        <div class="timer-info">
+            <h3 id="timer-heading">Time at Counter</h3>
+            <p id="timer-subtext">Waiting for first customer...</p>
+            <div class="timer-adj">
+                <button class="timer-adj-btn" onclick="adjustAvg(-30)">−</button>
+                <span class="timer-avg-label" id="avg-label">-- s/person</span>
+                <button class="timer-adj-btn" onclick="adjustAvg(+30)">+</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sentiment -->
+    <div class="panel">
+        <div class="panel-title">Current Customer Satisfaction</div>
+        <div class="rage-track"><div class="rage-fill" id="rage-bar" style="width:0%"></div></div>
+        <p id="sentiment-status">Waiting for data...</p>
+        <button id="discount-btn">🎟 Generate Apology Discount</button>
+    </div>
+
+    <!-- Call Next -->
+    <div class="control-panel">
+        <button id="btn-next-el" class="btn-next" onclick="callNext()">✅ CALL NEXT CUSTOMER</button>
+        <p style="margin-top:14px; color:var(--sub); font-size:0.82rem;">Click when done serving the current customer.</p>
+    </div>
+
+    <!-- Queue Table -->
+    <div class="queue-wrap">
+        <div class="queue-header">
+            <span>Live Queue</span>
+            <span id="queue-count" style="color:var(--primary)"></span>
+        </div>
+        <div class="table-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th>Token</th>
+                    <th>Name</th>
+                    <th>Satisfaction</th>
+                    <th>Game</th>
+                    <th>ETA</th>
+                    <th>Adjust</th>
+                </tr>
+            </thead>
+            <tbody id="queue-tbody">
+                <tr><td colspan="5" id="empty-msg">No one in queue yet.</td></tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    <!-- Discount Modal -->
+    <div class="modal-overlay" id="discount-modal">
+        <div class="modal">
+            <h3>Send Apology Discount</h3>
+            <p class="modal-sub" id="modal-subtitle">Select a discount for the customer</p>
+            <div class="discount-tiles" id="discount-tiles"></div>
+            <button class="modal-cancel" onclick="closeModal()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- QR Code Panel -->
+    <div class="qr-panel">
+        <div class="qr-box" id="qr-code"></div>
+        <div class="qr-info">
+            <h3>📱 Customer Join Link</h3>
+            <p>Scan to join the queue from any phone on this network.</p>
+            <div class="qr-url" id="qr-url-text">Generating...</div>
+        </div>
+    </div>
+
+    <div class="nav-links">
+        <a href="/">View Customer Page</a>
+        <a href="/logout" style="color:var(--danger)">Logout</a>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+    function toggleTheme() {
+        const doc = document.documentElement;
+        doc.setAttribute('data-theme', doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    }
+
+    // --- QR CODE ---
+    const customerUrl = window.location.protocol + '//' + window.location.hostname + ':' + window.location.port;
+    document.getElementById('qr-url-text').textContent = customerUrl;
+    new QRCode(document.getElementById('qr-code'), {
+        text: customerUrl,
+        width: 110, height: 110,
+        colorDark: '#000000', colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+    });
+
+    // --- LOAD QUEUE ID ---
+    async function loadQueueId() {
+        try {
+            const res = await fetch('/api/queue_list');
+            const data = await res.json();
+            document.getElementById('queue-id-header').innerText = data.queue_id;
+        } catch (e) { console.log('Failed to load queue ID'); }
+    }
+    loadQueueId();
+
+    // --- COUNTDOWN TIMER ---
+    let timerInterval = null;
+    let avgSeconds = 300;
+    let lastServingToken = null; // reset signal: changes when next customer is called
+
+    function startCountdown(totalSecs, elapsedSecs) {
+        clearInterval(timerInterval);
+        const circumference = 213.6;
+        const arc = document.getElementById('timer-arc');
+        const display = document.getElementById('timer-display');
+        const subtext = document.getElementById('timer-subtext');
+        const heading = document.getElementById('timer-heading');
+        heading.textContent = 'Time at Counter';
+        display.classList.remove('timer-urgent');
+
+        let secs = Math.max(0, Math.round(totalSecs - elapsedSecs));
+
+        function tick() {
+            display.textContent = secs > 0 ? secs : '0';
+            arc.style.strokeDashoffset = circumference * (1 - secs / totalSecs);
+            if (secs <= 0) {
+                arc.style.stroke = 'var(--danger)';
+                heading.textContent = 'Time Exceeded';
+                subtext.textContent = 'Auto-advance imminent...';
+                display.classList.add('timer-urgent');
+                clearInterval(timerInterval);
+            } else if (secs <= totalSecs * 0.25) {
+                arc.style.stroke = 'var(--danger)';
+                subtext.textContent = '⚠️ Wrapping up soon!';
+                display.classList.add('timer-urgent');
+            } else if (secs <= totalSecs * 0.5) {
+                arc.style.stroke = 'var(--warn)';
+                subtext.textContent = 'Halfway through service time.';
+                display.classList.remove('timer-urgent');
+            } else {
+                arc.style.stroke = 'var(--primary)';
+                subtext.textContent = 'Service in progress.';
+                display.classList.remove('timer-urgent');
+            }
+            secs--;
+        }
+        tick();
+        timerInterval = setInterval(tick, 1000);
+    }
+
+    function resetTimerDisplay() {
+        clearInterval(timerInterval);
+        document.getElementById('timer-display').textContent = '--';
+        document.getElementById('timer-display').classList.remove('timer-urgent');
+        document.getElementById('timer-heading').textContent = 'Time at Counter';
+        document.getElementById('timer-subtext').textContent = 'No one in queue.';
+        document.getElementById('timer-arc').style.strokeDashoffset = '0';
+        document.getElementById('timer-arc').style.stroke = 'var(--primary)';
+    }
+
+    async function adjustAvg(deltaSecs) {
+        const res = await fetch('/api/adjust_avg', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ delta: deltaSecs })
+        });
+        const data = await res.json();
+        avgSeconds = data.avg_seconds;
+        document.getElementById('avg-label').textContent = Math.round(avgSeconds) + ' s/person';
+        // Restart countdown with new total but same elapsed
+        const elapsed = avgSeconds - parseFloat(document.getElementById('timer-display').textContent || avgSeconds);
+        startCountdown(Math.round(avgSeconds), Math.max(0, elapsed));
+        updateQueueList(); // cascade ETA update
+    }
+
+    // --- STATUS ---
+    async function updateAdminStatus() {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+
+        document.getElementById('current').innerText = data.current;
+        document.getElementById('live-speed').innerText = (data.avg_seconds / 60).toFixed(1) + ' m/p';
+        avgSeconds = data.avg_seconds;
+        document.getElementById('avg-label').textContent = Math.round(avgSeconds) + ' s/person';
+
+        // Use serving_token as reset signal — changes every time next is called
+        if (data.elapsed_seconds !== null && data.elapsed_seconds !== undefined) {
+            if (data.serving_token !== lastServingToken) {
+                lastServingToken = data.serving_token;
+                startCountdown(Math.round(avgSeconds), Math.round(data.elapsed_seconds));
+            }
+        } else {
+            if (lastServingToken !== null) {
+                lastServingToken = null;
+                resetTimerDisplay();
+            }
+        }
+
+        const rage = data.current_satisfaction || 8;
+        const bar = document.getElementById('rage-bar');
+        const statusEl = document.getElementById('sentiment-status');
+        const discountBtn = document.getElementById('discount-btn');
+
+        // Satisfaction is 1-10, higher is better. Convert to bar display.
+        bar.style.width = (rage * 10) + '%';
+        if (rage <= 3) {
+            bar.style.background = 'var(--danger)';
+            statusEl.innerHTML = '😟 <strong>Customer needs support</strong>';
+            discountBtn.style.display = 'inline-block';
+        } else if (rage <= 5) {
+            bar.style.background = 'var(--warn)';
+            statusEl.innerText = '😐 Customer could use some help.';
+            discountBtn.style.display = 'none';
+        } else if (rage <= 7) {
+            bar.style.background = 'var(--primary)';
+            statusEl.innerText = '😊 Customer is satisfied.';
+            discountBtn.style.display = 'none';
+        } else {
+            bar.style.background = 'var(--primary)';
+            statusEl.innerText = '😄 Customer is very happy!';
+            discountBtn.style.display = 'none';
+        }
+    }
+
+    // --- QUEUE LIST ---
+    let hadPeople = false;
+
+    async function updateQueueList() {
+        const res = await fetch('/api/queue_list');
+        if (!res.ok) return;
+        const response = await res.json();
+        const members = response.members || response;  // Handle both data formats
+        const tbody = document.getElementById('queue-tbody');
+
+        if (members.length === 0) {
+            document.getElementById('total-waiting').innerText = '0';
+            document.getElementById('queue-count').innerText = '';
+            document.getElementById('btn-next-el').style.opacity = '0.35';
+            document.getElementById('btn-next-el').style.cursor = 'not-allowed';
+            // Only show celebration if queue was previously populated
+            if (hadPeople) {
+                hadPeople = false;
+                showEmptyCelebration(tbody);
+            } else if (!tbody.querySelector('.empty-state')) {
+                tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+                    <span class="empty-icon">🕐</span>
+                    <div class="empty-title">No one in queue</div>
+                    <div class="empty-sub">Waiting for customers to join...</div>
+                </div></td></tr>`;
+            }
+            return;
+        }
+
+        hadPeople = true;
+        // Clear any empty state before rebuilding rows
+        const emptyRow = tbody.querySelector('.empty-state');
+        if (emptyRow) tbody.innerHTML = '';
+        document.getElementById('btn-next-el').style.opacity = '1';
+        document.getElementById('btn-next-el').style.cursor = 'pointer';
+
+        document.getElementById('total-waiting').innerText = members.length;
+        document.getElementById('queue-count').innerText = members.length + ' people';
+
+        // Only rebuild rows that changed to avoid flicker
+        const existingRows = {};
+        tbody.querySelectorAll('tr[data-token]').forEach(r => existingRows[r.dataset.token] = r);
+        const newTokens = new Set(members.map(m => String(m.token)));
+
+        // Remove rows no longer in queue
+        Object.keys(existingRows).forEach(t => { if (!newTokens.has(t)) existingRows[t].remove(); });
+
+        members.forEach((m, idx) => {
+            const tokenStr = String(m.token);
+            let tr = existingRows[tokenStr];
+            const isNew = !tr;
+
+            if (isNew) {
+                tr = document.createElement('tr');
+                tr.dataset.token = tokenStr;
+                tbody.appendChild(tr);
+            }
+
+            tr.className = '';
+            if (m.is_current) tr.classList.add('serving');
+            if (m.satisfaction > 7) tr.classList.add('rage-high');
+            else if (m.satisfaction > 4) tr.classList.add('rage-mid');
+
+            const badgeClass = m.satisfaction > 7 ? 'high' : m.satisfaction > 4 ? 'mid' : 'low';
+            const satisfactionLabel = m.satisfaction > 7 ? '😡 ' + m.satisfaction : m.satisfaction > 4 ? '😤 ' + m.satisfaction : '😊 ' + m.satisfaction;
+
+            // Check if discount already sent
+            const existingBtn = tr.querySelector('.discount-row-btn');
+            const alreadySent = existingBtn && existingBtn.classList.contains('sent');
+            const discountHtml = m.satisfaction > 4
+                ? alreadySent
+                    ? `<button class="discount-row-btn sent" disabled>${existingBtn.textContent}</button>`
+                    : `<button class="discount-row-btn" onclick="sendDiscount(${m.token},'${m.name}',${m.satisfaction},this)">🎟 Send Discount</button>`
+                : '';
+
+            tr.innerHTML = `
+                <td><span class="token-badge">#${m.token}</span>${m.is_current ? '<span class="serving-tag">NOW</span>' : ''}</td>
+                <td style="font-weight:500">${m.name}</td>
+                <td><span class="rage-badge ${badgeClass}">${satisfactionLabel}</span>${discountHtml}</td>
+                <td>${m.game ? `<span class="game-badge ${m.game.playing ? 'playing' : ''}">${m.game.playing ? '🎮' : '🏆'} ${m.game.score}</span>` : '<span style="color:var(--sub);font-size:0.75rem">—</span>'}</td>
+                <td class="eta-cell">${m.eta} min</td>
+                <td>
+                    <div class="eta-controls">
+                        <button class="eta-btn" onclick="adjustEta(${m.token},-1)">−</button>
+                        <button class="eta-btn" onclick="adjustEta(${m.token},+1)">+</button>
+                    </div>
+                </td>`;
+
+            if (isNew) tr.style.animation = 'slideUp 0.3s ease both';
+        });
+    }
+
+    // --- DISCOUNT MODAL ---
+    let modalToken = null, modalBtn = null;
+
+    function sendDiscount(token, name, rage, btn) {
+        modalToken = token; modalBtn = btn;
+        document.getElementById('modal-subtitle').innerText = `${name}  ·  Stress ${rage}/10`;
+        const recommended = rage > 7 ? 20 : rage > 5 ? 15 : 10;
+        const tiles = document.getElementById('discount-tiles');
+        tiles.innerHTML = '';
+        [5, 10, 15, 20].forEach(pct => {
+            const div = document.createElement('div');
+            div.className = 'd-tile' + (pct === recommended ? ' recommended' : '');
+            div.innerHTML = `
+                ${pct === recommended ? '<span class="rec-tag">⭐ AI Pick</span>' : ''}
+                <div class="pct">${pct}%</div>
+                <div class="lbl">off total order</div>`;
+            div.onclick = () => applyDiscount(pct);
+            tiles.appendChild(div);
+        });
+        document.getElementById('discount-modal').classList.add('open');
+    }
+
+    async function applyDiscount(percent) {
+        await fetch('/api/apply_discount', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ token: modalToken, percent })
+        });
+        closeModal();
+        if (modalBtn) { modalBtn.textContent = `✅ ${percent}% Sent`; modalBtn.classList.add('sent'); modalBtn.disabled = true; }
+    }
+
+    function closeModal() { document.getElementById('discount-modal').classList.remove('open'); }
+
+    async function adjustEta(token, delta) {
+        await fetch('/api/adjust_eta', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ token, delta })
+        });
+        updateQueueList();
+    }
+
+    async function callNext() {
+        if (document.getElementById('total-waiting').innerText === '0') return;
+        const res = await fetch('/api/next', { method: 'POST' });
+        if (res.ok) { clearInterval(timerInterval); lastServingToken = null; refresh(); }
+        else alert('Error updating queue.');
+    }
+
+    function showEmptyCelebration(tbody) {
+        const colors = ['#39d353','#a29bfe','#fd79a8','#f0883e','#00cec9'];
+        let particles = '';
+        for (let i = 0; i < 12; i++) {
+            const left = Math.random() * 100;
+            const delay = Math.random() * 1.2;
+            const color = colors[i % colors.length];
+            particles += `<div class="particle" style="left:${left}%;background:${color};animation-delay:${delay}s"></div>`;
+        }
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+            <div class="empty-particles">${particles}</div>
+            <span class="empty-icon">🎉</span>
+            <div class="empty-title">Queue cleared!</div>
+            <div class="empty-sub">Great work — everyone has been served.</div>
+        </div></td></tr>`;
+    }
+
+    function refresh() { updateAdminStatus(); updateQueueList(); }
+    setInterval(refresh, 3000);
+    refresh();
+</script>
+</body>
+</html>

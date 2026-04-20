@@ -1,1055 +1,617 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Parking Dashboard</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>SmartQ | Your Queue</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        :root {
+            --bg: #f0f4f8; --card: #ffffff; --text: #1a202c; --sub: #718096;
+            --primary: #6c5ce7; --accent: #a29bfe; --glow: rgba(108,92,231,0.3);
+            --border: rgba(0,0,0,0.08);
         }
+        [data-theme="dark"] {
+            --bg: #0d1117; --card: rgba(22,27,34,0.85); --text: #e6edf3; --sub: #8b949e;
+            --primary: #a29bfe; --accent: #6c5ce7; --glow: rgba(162,155,254,0.2);
+            --border: rgba(255,255,255,0.08);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
         body {
-            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 50%, #16213e 100%);
-            color: #e0e0e0;
-            min-height: 100vh;
-            padding: 20px;
-            line-height: 1.6;
+            background: var(--bg); color: var(--text);
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            display: flex; justify-content: center; align-items: flex-start;
+            min-height: 100dvh; padding: env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px) env(safe-area-inset-bottom, 16px) env(safe-area-inset-left, 16px);
+            transition: background 0.4s; overflow-x: hidden;
         }
+        @media (min-height: 600px) { body { align-items: center; } }
 
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
+        /* Animated background */
+        [data-theme="dark"] body {
+            background: #0d1117;
         }
+        .bg-orbs { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+        .orb { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.15; animation: drift 12s infinite alternate ease-in-out; }
+        .orb1 { width: 400px; height: 400px; background: #6c5ce7; top: -100px; left: -100px; animation-delay: 0s; }
+        .orb2 { width: 300px; height: 300px; background: #00cec9; bottom: -80px; right: -80px; animation-delay: -4s; }
+        .orb3 { width: 200px; height: 200px; background: #fd79a8; top: 50%; left: 50%; animation-delay: -8s; }
+        @keyframes drift { from{transform:translate(0,0) scale(1)} to{transform:translate(40px,30px) scale(1.1)} }
+        [data-theme="light"] .bg-orbs { display: none; }
 
-        /* Header */
-        .header {
-            text-align: center;
-            margin-bottom: 50px;
-            padding: 35px 30px;
-            background: rgba(255, 255, 255, 0.06);
-            border-radius: 20px;
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            animation: fadeInDown 0.6s ease-out;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .header h1 {
-            font-size: 3em;
-            font-weight: 700;
-            margin-bottom: 12px;
-            color: #00d4ff;
-            text-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
-            letter-spacing: -0.5px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-        }
-
-        .header h1 i {
-            font-size: 1.2em;
-        }
-
-        .header p {
-            font-size: 1.2em;
-            color: #a0a0b0;
-            margin-bottom: 15px;
-            font-weight: 500;
-        }
-
-        .timestamp {
-            font-size: 0.95em;
-            color: #888;
-            font-style: italic;
-            letter-spacing: 0.3px;
-        }
-
-
-        /* Status Badge */
-        .status-badge {
-            display: inline-block;
-            padding: 12px 24px;
-            border-radius: 25px;
-            font-weight: 700;
-            margin-top: 15px;
-            font-size: 1.05em;
-            letter-spacing: 0.5px;
-            animation: scaleIn 0.5s ease-out;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-        }
-
-        .status-badge.free {
-            background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
-            color: white;
-            box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
-        }
-
-        .status-badge.busy {
-            background: linear-gradient(135deg, #f44336 0%, #da190b 100%);
-            color: white;
-            box-shadow: 0 0 20px rgba(244, 67, 54, 0.6);
-        }
-
-        .status-badge.unknown {
-            background: linear-gradient(135deg, #999 0%, #777 100%);
-            color: white;
-        }
-
-        /* Error Alert */
-        .error-alert {
-            background: linear-gradient(135deg, rgba(244, 67, 54, 0.2) 0%, rgba(244, 67, 54, 0.1) 100%);
-            color: #ff9999;
-            padding: 20px 25px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-            text-align: center;
-            box-shadow: 0 0 20px rgba(244, 67, 54, 0.3);
-            border: 2px solid rgba(244, 67, 54, 0.5);
-            animation: shake 0.5s ease-out;
-            font-weight: 600;
-        }
-
-
-        /* Cards Grid */
-        .cards-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 25px;
-            margin-bottom: 45px;
-        }
-
+        /* Card */
         .card {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 18px;
-            padding: 30px;
-            backdrop-filter: blur(12px);
-            transition: all 0.4s cubic-bezier(0.23, 1, 0.320, 1);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-            animation: fadeInUp 0.6s ease-out backwards;
-            position: relative;
-            overflow: hidden;
+            background: var(--card); border: 1px solid var(--border);
+            padding: 32px 24px; border-radius: 24px;
+            width: 100%; max-width: 420px; text-align: center; position: relative; z-index: 1;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 24px 64px rgba(0,0,0,0.3), 0 0 0 1px var(--border);
+            animation: cardIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
+            margin: 16px;
         }
-
-        .card:nth-child(1) { animation-delay: 0.1s; }
-        .card:nth-child(2) { animation-delay: 0.2s; }
-        .card:nth-child(3) { animation-delay: 0.3s; }
-        .card:nth-child(4) { animation-delay: 0.4s; }
-        .card:nth-child(5) { animation-delay: 0.5s; }
-        .card:nth-child(6) { animation-delay: 0.6s; }
-
-        .card::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(0, 212, 255, 0.1) 0%, transparent 70%);
-            opacity: 0;
-            transition: opacity 0.3s ease;
+        @media (max-width: 480px) {
+            .card { border-radius: 20px; padding: 28px 20px; margin: 12px; }
         }
+        @keyframes cardIn { from{opacity:0;transform:translateY(30px) scale(0.95)} to{opacity:1;transform:translateY(0) scale(1)} }
 
-        .card:hover {
-            background: rgba(255, 255, 255, 0.13);
-            border-color: rgba(0, 212, 255, 0.4);
-            transform: translateY(-8px);
-            box-shadow: 0 15px 50px rgba(0, 212, 255, 0.15);
+        .theme-btn { position: absolute; top: 16px; right: 16px; cursor: pointer; border: 1px solid var(--border); background: var(--bg); border-radius: 8px; padding: 5px 9px; font-size: 14px; color: var(--text); transition: 0.2s; }
+        .theme-btn:hover { border-color: var(--primary); }
+
+        /* Registration */
+        #registration-view h2 { font-size: 1.6rem; font-weight: 800; margin-bottom: 6px; background: linear-gradient(135deg, var(--primary), #fd79a8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        #registration-view p { color: var(--sub); font-size: 0.88rem; margin-bottom: 20px; }
+        input {
+            width: 100%; padding: 13px 16px; border-radius: 10px;
+            border: 1px solid var(--border); background: var(--bg);
+            color: var(--text); font-size: 15px; font-family: inherit;
+            margin-bottom: 12px; transition: 0.2s; outline: none;
         }
+        input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--glow); }
 
-        .card-title {
-            font-size: 0.88em;
-            color: #a0b0c0;
-            margin-bottom: 16px;
-            text-transform: uppercase;
-            letter-spacing: 1.2px;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .btn {
+            background: linear-gradient(135deg, var(--primary), #6c5ce7);
+            color: white; border: none; padding: 16px; margin: 6px 0;
+            border-radius: 12px; cursor: pointer; width: 100%;
+            font-weight: 700; font-size: 16px; font-family: inherit;
+            transition: 0.25s; letter-spacing: 0.2px;
+            box-shadow: 0 4px 16px var(--glow);
+            min-height: 52px; touch-action: manipulation;
         }
+        @media (hover: hover) { .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px var(--glow); } }
+        .btn:active { transform: scale(0.97); opacity: 0.9; }
+        .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--sub); box-shadow: none; font-size: 14px; padding: 12px; }
+        @media (hover: hover) { .btn-secondary:hover { border-color: var(--sub); color: var(--text); box-shadow: none; } }
 
-        .card-title i {
-            font-size: 1.1em;
-            color: #00d4ff;
+        /* Queue view */
+        #queue-view { animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+        .welcome { font-size: 0.88rem; color: var(--sub); margin-bottom: 2px; }
+        .token-display { font-size: 2.2rem; font-weight: 800; letter-spacing: -1px; margin: 4px 0 2px; }
+        .token-display span { color: var(--primary); }
+        .serving-line { font-size: 0.85rem; color: var(--sub); margin-bottom: 4px; }
+        .serving-line b { color: var(--text); }
+
+        /* ETA ring */
+        .eta-wrap { position: relative; width: 130px; height: 130px; margin: 18px auto; }
+        .eta-svg { transform: rotate(-90deg); }
+        .eta-bg { fill: none; stroke: var(--border); stroke-width: 8; }
+        .eta-arc { fill: none; stroke: var(--primary); stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 1s ease; filter: drop-shadow(0 0 6px var(--primary)); }
+        .eta-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .eta-val { font-size: 2rem; font-weight: 800; line-height: 1; }
+        .eta-unit { font-size: 0.65rem; color: var(--sub); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+
+        /* AI section */
+        .ai-section { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 18px; }
+        .ai-label { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--sub); margin-bottom: 10px; }
+        #ai-text {
+            font-size: 14px; line-height: 1.6; color: var(--text);
+            min-height: 48px; margin-bottom: 14px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+            border-radius: 10px; padding: 12px 14px; text-align: left;
         }
+        #ai-options { display: flex; flex-direction: column; gap: 0; }
 
-        .card-value {
-            font-size: 2.8em;
-            font-weight: 800;
-            color: #00d4ff;
-            margin-bottom: 12px;
-            letter-spacing: -1px;
-            animation: slideIn 0.5s ease-out;
+        /* Discount banner */
+        #discount-banner {
+            display: none; margin-top: 14px;
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white; border-radius: 12px; padding: 13px 16px;
+            font-weight: 600; font-size: 14px; line-height: 1.4;
+            animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
         }
+        @keyframes popIn { from{transform:scale(0.8);opacity:0} to{transform:scale(1);opacity:1} }
 
-        .card-subtext {
-            font-size: 0.95em;
-            color: #888;
-            font-weight: 500;
-        }
-
-        /* Status Card Special Styling */
-        .card.status-card {
-            grid-column: 1 / -1;
-            text-align: center;
-            padding: 40px;
-            background: linear-gradient(135deg, rgba(0, 212, 255, 0.08) 0%, rgba(255, 255, 255, 0.05) 100%);
-            border: 2px solid rgba(0, 212, 255, 0.2);
-        }
-
-        .card.status-card .card-value {
-            font-size: 3.5em;
-            margin: 25px 0;
-        }
-
-        .card.status-card .card-title {
-            justify-content: center;
-            font-size: 1.1em;
-        }
-
-
-        /* Anomaly Alert */
-        .anomaly-warning {
-            background: linear-gradient(135deg, rgba(255, 193, 7, 0.2) 0%, rgba(255, 193, 7, 0.1) 100%);
-            border: 2px solid #ffc107;
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 25px;
-            text-align: center;
-            color: #ffd54f;
-            font-weight: 700;
-            box-shadow: 0 0 20px rgba(255, 193, 7, 0.3);
-            animation: pulse 2s infinite;
-        }
-
-        /* History Section */
-        .history-section {
-            background: rgba(255, 255, 255, 0.07);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 18px;
-            padding: 35px;
-            backdrop-filter: blur(12px);
-            margin-top: 50px;
-            animation: fadeInUp 0.8s ease-out;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .history-section h2 {
-            font-size: 1.8em;
-            font-weight: 700;
-            color: #00d4ff;
-            margin-bottom: 28px;
-            text-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
-            letter-spacing: -0.5px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .history-section h2 i {
-            font-size: 1em;
-        }
-
-        /* Chart Container */
-        .chart-container {
-            position: relative;
-            height: 350px;
-            margin-bottom: 40px;
-            background: rgba(0, 212, 255, 0.02);
-            border-radius: 15px;
-            padding: 20px;
-            border: 1px solid rgba(0, 212, 255, 0.1);
-            animation: fadeIn 0.8s ease-out 0.2s backwards;
-        }
-
-        .history-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .history-table thead {
-            border-bottom: 2px solid rgba(0, 212, 255, 0.4);
-            background: rgba(0, 212, 255, 0.05);
-        }
-
-        .history-table th {
-            text-align: left;
-            padding: 16px 14px;
-            color: #00d4ff;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            font-size: 0.95em;
-        }
-
-        .history-table td {
-            padding: 14px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            color: #e0e0e0;
-            font-weight: 500;
-        }
-
-        .history-table tbody tr {
-            transition: all 0.3s ease;
-            animation: fadeInLeft 0.5s ease-out backwards;
-        }
-
-        .history-table tbody tr:nth-child(1) { animation-delay: 0s; }
-        .history-table tbody tr:nth-child(2) { animation-delay: 0.1s; }
-        .history-table tbody tr:nth-child(3) { animation-delay: 0.2s; }
-        .history-table tbody tr:nth-child(4) { animation-delay: 0.3s; }
-        .history-table tbody tr:nth-child(5) { animation-delay: 0.4s; }
-
-        .history-table tbody tr:hover {
-            background-color: rgba(0, 212, 255, 0.1);
-            transform: scale(1.01);
-        }
-
-        .status-free {
-            color: #4caf50;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .status-free::before {
-            content: '✓';
-            font-weight: bold;
-        }
-
-        .status-busy {
-            color: #f44336;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .status-busy::before {
-            content: '✕';
-            font-weight: bold;
-        }
-
-
-        /* No Data Message */
-        .no-data {
-            text-align: center;
-            padding: 50px 20px;
-            color: #888;
-            font-size: 1.2em;
-            font-weight: 500;
-        }
-
-        /* Stat Box */
-        .stat-box {
-            display: flex;
-            justify-content: space-around;
-            flex-wrap: wrap;
-            gap: 18px;
-            margin-top: 25px;
-        }
-
-        .stat-item {
-            flex: 1;
-            min-width: 160px;
-            background: linear-gradient(135deg, rgba(0, 212, 255, 0.12) 0%, rgba(0, 212, 255, 0.05) 100%);
-            padding: 18px;
-            border-radius: 12px;
-            border: 1px solid rgba(0, 212, 255, 0.3);
-            text-align: center;
-            transition: all 0.3s ease;
-            animation: scaleIn 0.5s ease-out;
-        }
-
-        .stat-item:hover {
-            transform: scale(1.05);
-            border-color: rgba(0, 212, 255, 0.6);
-        }
-
-        .stat-item-label {
-            font-size: 0.86em;
-            color: #888;
-            margin-bottom: 10px;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-        }
-
-        .stat-item-value {
-            font-size: 2em;
-            color: #00d4ff;
-            font-weight: 800;
-        }
-
-        /* Trend Badge */
-        .trend-badge {
-            display: inline-block;
-            padding: 7px 16px;
-            border-radius: 18px;
-            font-size: 0.92em;
-            font-weight: 700;
-            margin-top: 8px;
-            letter-spacing: 0.3px;
-        }
-
-        .trend-badge.increasing {
-            background: linear-gradient(135deg, rgba(244, 67, 54, 0.3) 0%, rgba(244, 67, 54, 0.15) 100%);
-            color: #ff6b6b;
-            border: 1.5px solid #ff6b6b;
-        }
-
-        .trend-badge.decreasing {
-            background: linear-gradient(135deg, rgba(76, 175, 80, 0.3) 0%, rgba(76, 175, 80, 0.15) 100%);
-            color: #4caf50;
-            border: 1.5px solid #4caf50;
-        }
-
-        .trend-badge.stable {
-            background: linear-gradient(135deg, rgba(0, 212, 255, 0.3) 0%, rgba(0, 212, 255, 0.15) 100%);
-            color: #00d4ff;
-            border: 1.5px solid #00d4ff;
-        }
-
-        /* Footer */
-        .footer {
-            text-align: center;
-            margin-top: 50px;
-            padding: 30px;
-            color: #666;
-            font-size: 0.95em;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            animation: fadeIn 0.8s ease-out 1s backwards;
-        }
-
-        .footer p {
-            margin-bottom: 12px;
-            line-height: 1.8;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .header h1 {
-                font-size: 2em;
-            }
-
-            .header p {
-                font-size: 1em;
-            }
-
-            .card-value {
-                font-size: 2em;
-            }
-
-            .card.status-card .card-value {
-                font-size: 2.5em;
-            }
-
-            .cards-grid {
-                grid-template-columns: 1fr;
-                gap: 18px;
-            }
-
-            .history-table {
-                font-size: 0.85em;
-            }
-
-            .chart-container {
-                height: 250px;
-            }
-
-            .history-section {
-                padding: 20px;
-            }
-
-            .header {
-                padding: 25px 20px;
-                margin-bottom: 30px;
-            }
-        }
-
-        /* Animations */
-        @keyframes fadeInDown {
-            from {
-                opacity: 0;
-                transform: translateY(-30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes fadeInLeft {
-            from {
-                opacity: 0;
-                transform: translateX(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-            }
-            to {
-                opacity: 1;
-            }
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateX(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        @keyframes scaleIn {
-            from {
-                opacity: 0;
-                transform: scale(0.95);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-
-        @keyframes pulse {
-            0%, 100% {
-                opacity: 1;
-                transform: scale(1);
-            }
-            50% {
-                opacity: 0.85;
-                transform: scale(1.01);
-            }
-        }
-
-        @keyframes shake {
-            0%, 100% {
-                transform: translateX(0);
-            }
-            25% {
-                transform: translateX(-10px);
-            }
-            75% {
-                transform: translateX(10px);
-            }
-        }
+        /* Snake game */
+        #snake-view { animation: fadeIn 0.4s ease; }
+        .snake-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-right: 44px; }
+        .snake-header h3 { font-size: 1rem; font-weight: 700; }
+        .score-display { font-size: 0.82rem; color: var(--sub); }
+        .score-display span { color: var(--primary); font-weight: 700; font-size: 1rem; }
+        #snake-canvas { border: 2px solid var(--border); border-radius: 10px; display: block; margin: 0 auto; background: #0a0a0a; max-width: 100%; touch-action: none; }
+        .snake-controls { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px; max-width: 180px; margin-left: auto; margin-right: auto; }
+        .d-btn { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 0; font-size: 18px; cursor: pointer; color: var(--text); transition: 0.15s; min-height: 52px; min-width: 52px; touch-action: manipulation; display: flex; align-items: center; justify-content: center; }
+        .d-btn:active { background: var(--primary); color: #0d1117; border-color: var(--primary); transform: scale(0.93); }
+        @media (hover: hover) { .d-btn:hover { background: var(--primary); color: #0d1117; border-color: var(--primary); } }
+        .snake-msg { font-size: 13px; color: var(--sub); margin-top: 8px; min-height: 18px; text-align: center; }
+        .threshold-bar-wrap { margin-top: 10px; }
+        .threshold-label { font-size: 0.7rem; color: var(--sub); display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .threshold-track { background: var(--border); height: 6px; border-radius: 3px; overflow: hidden; }
+        .threshold-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #fd79a8); border-radius: 3px; transition: width 0.3s; }
+        #goodbye-view { animation: fadeIn 0.5s ease; }
+        .confetti-emoji { font-size: 52px; animation: bounce 1s infinite alternate; display: block; margin-bottom: 10px; }
+        @keyframes bounce { from{transform:scale(1) rotate(-5deg)} to{transform:scale(1.15) rotate(5deg)} }
+        .goodbye-title { font-size: 1.5rem; font-weight: 800; background: linear-gradient(135deg, var(--primary), #fd79a8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 12px; }
+        .goodbye-msg { font-size: 15px; color: var(--text); line-height: 1.6; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1><i class="fas fa-parking"></i> Smart Parking Dashboard</h1>
-            <p><i class="fas fa-microchip"></i> IoT + AI + Cloud System</p>
-            {% if data.error %}
-                <p id="lastUpdated" class="timestamp"><i class="fas fa-exclamation-triangle"></i> Error: {{ data.error }}</p>
-            {% else %}
-                <p id="lastUpdated" class="timestamp"><i class="fas fa-clock"></i> Last Updated: {{ data.timestamp }}</p>
-            {% endif %}
-        </div>
 
-        <!-- Error Alert -->
-        <div id="errorAlert" class="error-alert" style="display: {{ 'block' if data.error else 'none' }};">
-            <strong><i class="fas fa-times-circle"></i> System Error:</strong>
-            <span id="errorMessage">{{ data.error or '' }}</span>
-            <p style="margin-top: 10px; font-size: 0.9em;">Please check the backend or ThingSpeak connection.</p>
-        </div>
+<!-- Animated background orbs (dark mode only) -->
+<div class="bg-orbs">
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div class="orb orb3"></div>
+</div>
 
-        <!-- Main Cards -->
-        <div class="cards-grid">
-            <!-- Vehicle Count Card -->
-            {% if data.vehicle_count is not none %}
-                <div class="card">
-                    <div class="card-title"><i class="fas fa-car"></i> Current Vehicles</div>
-                    <div id="vehicleCount" class="card-value">{{ data.vehicle_count }}</div>
-                    <div class="card-subtext">vehicles in lot</div>
-                </div>
-            {% else %}
-                <div class="card">
-                    <div class="card-title"><i class="fas fa-car"></i> Current Vehicles</div>
-                    <div class="card-value">—</div>
-                    <div class="card-subtext">No data available</div>
-                </div>
-            {% endif %}
+<div class="card">
+    <button class="theme-btn" onclick="toggleTheme()">🌓</button>
 
-            <!-- Average Count Card -->
-            {% if data.statistics and data.statistics.average is not none %}
-                <div class="card">
-                    <div class="card-title"><i class="fas fa-chart-line"></i> Average Count</div>
-                    <div id="averageCount" class="card-value">{{ "%.1f"|format(data.statistics.average) }}</div>
-                    <div class="card-subtext">last 5 entries</div>
-                </div>
-            {% else %}
-                <div class="card">
-                    <div class="card-title"><i class="fas fa-chart-line"></i> Average Count</div>
-                    <div class="card-value">—</div>
-                    <div class="card-subtext">No data available</div>
-                </div>
-            {% endif %}
-
-            <!-- Trend Card -->
-            {% if data.statistics and data.statistics.trend %}
-                <div class="card">
-                    <div class="card-title"><i class="fas fa-chart-bar"></i> Trend</div>
-                    <div id="trendValue" class="card-value" style="font-size: 2em;">
-                        {% if data.statistics.trend == 'increasing' %}
-                            <i class="fas fa-arrow-up" style="color: #ff6b6b;"></i> Increasing
-                        {% elif data.statistics.trend == 'decreasing' %}
-                            <i class="fas fa-arrow-down" style="color: #4caf50;"></i> Decreasing
-                        {% else %}
-                            <i class="fas fa-minus" style="color: #00d4ff;"></i> Stable
-                        {% endif %}
-                    </div>
-                    <div id="trendBadge" class="trend-badge {{ data.statistics.trend }}">
-                        {{ data.statistics.trend|capitalize }}
-                    </div>
-                </div>
-            {% else %}
-                <div class="card">
-                    <div class="card-title"><i class="fas fa-chart-bar"></i> Trend</div>
-                    <div class="card-value">—</div>
-                    <div class="card-subtext">No data available</div>
-                </div>
-            {% endif %}
-
-            <!-- Status Card (Full Width) -->
-            <div class="card status-card">
-                <div class="card-title"><i class="fas fa-square-parking"></i> Parking Status</div>
-                {% if data.status %}
-                    <div id="statusValue" class="card-value">{{ data.status }}</div>
-                    <div id="statusBadge" class="status-badge {% if data.status == 'FREE' %}free{% elif data.status == 'BUSY' %}busy{% else %}unknown{% endif %}">
-                        {% if data.status == 'FREE' %}
-                            <i class="fas fa-check-circle"></i> PARKING AVAILABLE
-                        {% elif data.status == 'BUSY' %}
-                            <i class="fas fa-ban"></i> PARKING FULL
-                        {% else %}
-                            <i class="fas fa-question-circle"></i> STATUS UNKNOWN
-                        {% endif %}
-                    </div>
-                    <div id="anomalyWarning" class="anomaly-warning" style="display: {{ 'block' if data.anomaly else 'none' }};">
-                        <i class="fas fa-exclamation-triangle"></i> ANOMALY DETECTED - Vehicle count exceeds safe threshold!
-                    </div>
-                {% else %}
-                    <div class="card-value">—</div>
-                    <div class="card-subtext">No status data available</div>
-                {% endif %}
-            </div>
-
-            <!-- Min/Max Stats -->
-            {% if data.statistics and (data.statistics.min is not none or data.statistics.max is not none) %}
-                <div class="card">
-                    <div class="card-title"><i class="fas fa-arrow-alt-down"></i> Min Count</div>
-                    <div id="minCount" class="card-value">{{ data.statistics.min if data.statistics.min is not none else '—' }}</div>
-                    <div class="card-subtext">minimum in history</div>
-                </div>
-
-                <div class="card">
-                    <div class="card-title"><i class="fas fa-arrow-alt-up"></i> Max Count</div>
-                    <div id="maxCount" class="card-value">{{ data.statistics.max if data.statistics.max is not none else '—' }}</div>
-                    <div class="card-subtext">maximum in history</div>
-                </div>
-            {% endif %}
-        </div>
-
-        <!-- History Section with Chart -->
-        {% if data.history and data.history|length > 0 %}
-            <div class="history-section">
-                <h2><i class="fas fa-chart-area"></i> Vehicle History</h2>
-                
-                <!-- Chart Container -->
-                <div class="chart-container">
-                    <canvas id="vehicleChart"></canvas>
-                </div>
-
-                <h2 style="margin-top: 35px; margin-bottom: 20px;"><i class="fas fa-list"></i> Last 5 Entries</h2>
-                <table class="history-table">
-                    <thead>
-                        <tr>
-                            <th><i class="fas fa-list-ol"></i> #</th>
-                            <th><i class="fas fa-hashtag"></i> Entry ID</th>
-                            <th><i class="fas fa-clock"></i> Timestamp</th>
-                            <th><i class="fas fa-car"></i> Vehicles</th>
-                            <th><i class="fas fa-info-circle"></i> Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="historyBody">
-                        {% for entry in data.history %}
-                            <tr>
-                                <td>{{ entry.serial_number }}</td>
-                                <td title="{{ entry.entry_id }}">#{{ entry.display_entry_id }}</td>
-                                <td>{{ entry.created_at }}</td>
-                                <td>{{ entry.vehicle_count }}</td>
-                                <td>
-                                    {% if entry.ai_decision == 1 %}
-                                        <span class="status-busy">BUSY</span>
-                                    {% else %}
-                                        <span class="status-free">FREE</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="history-section">
-                <div class="no-data">
-                    <i class="fas fa-inbox"></i> No historical data available yet
-                </div>
-            </div>
-        {% endif %}
-
-        <!-- Footer -->
-        <div class="footer">
-            <p>
-                <i class="fas fa-sync"></i> Dashboard auto-refreshes every 5 seconds | 
-                <i class="fas fa-satellite"></i> Data from ThingSpeak | 
-                <i class="fas fa-robot"></i> AI powered by Groq LLM
-            </p>
-            <p style="margin-top: 10px; color: #555;">
-                Smart Parking System v2.0 | Enhanced Dashboard with Real-time Analytics
-            </p>
-        </div>
+    <!-- 1. REGISTRATION -->
+    <div id="registration-view">
+        <h2>SmartQ</h2>
+        <p>Enter the Queue ID and your name to join the line.</p>
+        <input type="text" id="queue-id-input" placeholder="Enter Queue ID from admin display..." autofocus>
+        <input type="text" id="user-name" placeholder="Your name...">
+        <div id="error-msg" style="color:var(--danger); font-size:0.85rem; margin-bottom:10px; min-height:20px; display:none;"></div>
+        <button class="btn" onclick="joinQueue()">Join the Queue →</button>
     </div>
 
-    <script>
-        let vehicleChart = null;
+    <!-- 2. QUEUE VIEW -->
+    <div id="queue-view" style="display:none;">
+        <p class="welcome" id="welcome-msg">Welcome!</p>
+        <div class="token-display">Token <span id="my-token">--</span></div>
+        <p class="serving-line" style="font-size:0.78rem; margin-bottom:12px;">Queue ID: <b id="queue-id-display" style="color:var(--primary);">--</b></p>
+        <p class="serving-line">Now serving: <b id="current">--</b></p>
 
-        function formatTrendText(trend) {
-            switch (trend) {
-                case 'increasing':
-                    return '<i class="fas fa-arrow-up" style="color: #ff6b6b;"></i> Increasing';
-                case 'decreasing':
-                    return '<i class="fas fa-arrow-down" style="color: #4caf50;"></i> Decreasing';
-                default:
-                    return '<i class="fas fa-minus" style="color: #00d4ff;"></i> Stable';
+        <div class="eta-wrap">
+            <svg class="eta-svg" width="130" height="130" viewBox="0 0 130 130">
+                <circle class="eta-bg" cx="65" cy="65" r="54"/>
+                <circle class="eta-arc" id="eta-arc" cx="65" cy="65" r="54"
+                    stroke-dasharray="339.3" stroke-dashoffset="0"/>
+            </svg>
+            <div class="eta-center">
+                <span class="eta-val" id="eta">--</span>
+                <span class="eta-unit">mins left</span>
+            </div>
+        </div>
+
+        <div class="ai-section">
+            <div class="ai-label">🤖 AI Assistant</div>
+            <div id="ai-text">Initializing...</div>
+            <div id="ai-options"></div>
+        </div>
+
+        <button class="btn btn-secondary" onclick="leaveQueue()" style="margin-top:14px;">Leave Queue</button>
+        <div id="discount-banner"></div>
+    </div>
+
+    <!-- 3. SNAKE GAME VIEW -->
+    <div id="snake-view" style="display:none;">
+        <div class="snake-header">
+            <h3>🐍 Snake</h3>
+            <div class="score-display">Score: <span id="snake-score">0</span></div>
+        </div>
+        <canvas id="snake-canvas" width="280" height="280"></canvas>
+        <div class="threshold-bar-wrap">
+            <div class="threshold-label"><span>Progress to discount</span><span id="threshold-pct">0%</span></div>
+            <div class="threshold-track"><div class="threshold-fill" id="threshold-fill" style="width:0%"></div></div>
+        </div>
+        <div class="snake-controls">
+            <div></div><button class="d-btn" onclick="snakeDir(0,-1)">▲</button><div></div>
+            <button class="d-btn" onclick="snakeDir(-1,0)">◀</button>
+            <button class="d-btn" onclick="snakeDir(0,1)">▼</button>
+            <button class="d-btn" onclick="snakeDir(1,0)">▶</button>
+        </div>
+        <p class="snake-msg" id="snake-msg">Use arrow keys or buttons · Score 200 for a discount!</p>
+        <button class="btn btn-secondary" onclick="exitSnake()" style="margin-top:12px;">← Back to Queue</button>
+    </div>
+
+    <!-- 4. GOODBYE -->
+    <div id="goodbye-view" style="display:none;">
+        <span class="confetti-emoji">🎉</span>
+        <div class="goodbye-title">It's your turn!</div>
+        <div class="goodbye-msg" id="goodbye-text">Loading your message...</div>
+    </div>
+</div>
+
+<script>
+    let myToken = localStorage.getItem('token');
+    let myName = localStorage.getItem('userName');
+    let myQueueId = localStorage.getItem('queueId');
+    let goodbyeTriggered = false;
+    let statusInterval;
+    let shownDiscount = null;
+    let maxEta = null; // for ETA ring
+
+    window.onload = async () => {
+        if (myToken && myName) {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            if (parseInt(myToken) > 1 && data.last_token >= parseInt(myToken)) {
+                if (data.current > parseInt(myToken)) triggerGoodbye();
+                else showQueue();
+            } else {
+                localStorage.clear(); myToken = null; myName = null;
             }
         }
+    };
 
-        function formatTrendBadge(trend) {
-            switch (trend) {
-                case 'increasing':
-                    return { text: 'Increasing', className: 'trend-badge increasing' };
-                case 'decreasing':
-                    return { text: 'Decreasing', className: 'trend-badge decreasing' };
-                default:
-                    return { text: 'Stable', className: 'trend-badge stable' };
-            }
+    function toggleTheme() {
+        const doc = document.documentElement;
+        doc.setAttribute('data-theme', doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    }
+
+    async function joinQueue() {
+        const queueIdInput = document.getElementById('queue-id-input');
+        const nameInput = document.getElementById('user-name');
+        const errorMsg = document.getElementById('error-msg');
+        
+        if (!queueIdInput.value.trim()) {
+            errorMsg.textContent = 'Please enter the Queue ID';
+            errorMsg.style.display = 'block';
+            return;
         }
-
-        function getStatusBadge(value) {
-            switch (value) {
-                case 'FREE':
-                    return {
-                        html: '<i class="fas fa-check-circle"></i> PARKING AVAILABLE',
-                        className: 'status-badge free'
-                    };
-                case 'BUSY':
-                    return {
-                        html: '<i class="fas fa-ban"></i> PARKING FULL',
-                        className: 'status-badge busy'
-                    };
-                default:
-                    return {
-                        html: '<i class="fas fa-question-circle"></i> STATUS UNKNOWN',
-                        className: 'status-badge unknown'
-                    };
-            }
+        
+        if (!nameInput.value.trim()) {
+            errorMsg.textContent = 'Please enter your name';
+            errorMsg.style.display = 'block';
+            return;
         }
-
-        function renderHistoryRows(history) {
-            if (!history || history.length === 0) {
-                return '<tr><td colspan="5" style="text-align:center; color:#888; padding:20px;">No historical data available yet</td></tr>';
+        
+        // Get the current queue ID from the server
+        try {
+            const statusRes = await fetch('/api/status?token=1');
+            const statusData = await statusRes.json();
+            const currentQueueId = statusData.queue_id;
+            
+            // Validate Queue ID
+            if (queueIdInput.value.trim().toUpperCase() !== currentQueueId) {
+                errorMsg.textContent = '❌ Queue ID does not match. Please enter the correct Queue ID.';
+                errorMsg.style.display = 'block';
+                return;
             }
-            return history.slice().reverse().map((entry, index) => {
-                const statusClass = entry.ai_decision === 1 ? 'status-busy' : 'status-free';
-                const statusText = entry.ai_decision === 1 ? 'BUSY' : 'FREE';
-                return `
-                    <tr>
-                        <td>${entry.serial_number}</td>
-                        <td title="${entry.entry_id}">#${entry.display_entry_id}</td>
-                        <td>${entry.created_at}</td>
-                        <td>${entry.vehicle_count}</td>
-                        <td><span class="${statusClass}">${statusText}</span></td>
-                    </tr>
-                `;
-            }).join('');
+        } catch (e) {
+            errorMsg.textContent = 'Error validating Queue ID. Please try again.';
+            errorMsg.style.display = 'block';
+            return;
         }
-
-        function getChartLabels(history) {
-            return history.map(entry => {
-                const parts = entry.created_at.split(' ');
-                return parts[1] || entry.created_at;
-            }).reverse();
-        }
-
-        function getChartData(history) {
-            return history.map(entry => entry.vehicle_count).reverse();
-        }
-
-        function initChart(historyData) {
-            const ctx = document.getElementById('vehicleChart');
-            if (!ctx) return null;
-
-            const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 400);
-            gradient.addColorStop(0, 'rgba(0, 212, 255, 0.3)');
-            gradient.addColorStop(1, 'rgba(0, 212, 255, 0.01)');
-
-            return new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: getChartLabels(historyData),
-                    datasets: [{
-                        label: 'Vehicle Count',
-                        data: getChartData(historyData),
-                        borderColor: '#00d4ff',
-                        backgroundColor: gradient,
-                        borderWidth: 3,
-                        pointBackgroundColor: '#00d4ff',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2,
-                        pointRadius: 6,
-                        pointHoverRadius: 8,
-                        tension: 0.4,
-                        fill: true,
-                        animation: {
-                            duration: 900,
-                            easing: 'easeInOutQuart'
-                        }
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: true,
-                            labels: {
-                                color: '#e0e0e0',
-                                font: {
-                                    size: 13,
-                                    weight: 'bold',
-                                    family: "'Inter', sans-serif"
-                                },
-                                usePointStyle: true,
-                                pointStyle: 'circle',
-                                padding: 20
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            titleColor: '#00d4ff',
-                            bodyColor: '#e0e0e0',
-                            borderColor: '#00d4ff',
-                            borderWidth: 1,
-                            padding: 12,
-                            titleFont: {
-                                size: 14,
-                                weight: 'bold'
-                            },
-                            bodyFont: {
-                                size: 12
-                            },
-                            cornerRadius: 8,
-                            caretSize: 8
-                        }
-                    },
-                    scales: {
-                        y: {
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.08)',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#888',
-                                font: {
-                                    size: 12
-                                }
-                            },
-                            min: 0
-                        },
-                        x: {
-                            grid: {
-                                display: false
-                            },
-                            ticks: {
-                                color: '#888',
-                                font: {
-                                    size: 11
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function updateChart(historyData) {
-            if (!vehicleChart) return;
-            vehicleChart.data.labels = getChartLabels(historyData);
-            vehicleChart.data.datasets[0].data = getChartData(historyData);
-            vehicleChart.update({ duration: 600, easing: 'easeOutQuart' });
-        }
-
-        function updateDashboard(data) {
-            const lastUpdated = document.getElementById('lastUpdated');
-            const errorAlert = document.getElementById('errorAlert');
-            const errorMessage = document.getElementById('errorMessage');
-            const vehicleCount = document.getElementById('vehicleCount');
-            const averageCount = document.getElementById('averageCount');
-            const trendValue = document.getElementById('trendValue');
-            const trendBadge = document.getElementById('trendBadge');
-            const statusValue = document.getElementById('statusValue');
-            const statusBadge = document.getElementById('statusBadge');
-            const anomalyWarning = document.getElementById('anomalyWarning');
-            const minCount = document.getElementById('minCount');
-            const maxCount = document.getElementById('maxCount');
-            const historyBody = document.getElementById('historyBody');
-
-            if (lastUpdated) {
-                lastUpdated.innerHTML = data.error
-                    ? `<i class="fas fa-exclamation-triangle"></i> ${data.error}`
-                    : `<i class="fas fa-clock"></i> Last Updated: ${data.timestamp}`;
-            }
-
-            if (errorAlert) {
-                errorAlert.style.display = data.error ? 'block' : 'none';
-            }
-            if (errorMessage) {
-                errorMessage.textContent = data.error || '';
-            }
-
-            if (vehicleCount) {
-                vehicleCount.textContent = data.vehicle_count != null ? data.vehicle_count : '—';
-            }
-            if (averageCount) {
-                averageCount.textContent = data.statistics && Number.isFinite(data.statistics.average)
-                    ? data.statistics.average.toFixed(1)
-                    : '—';
-            }
-
-            if (trendValue && trendBadge) {
-                const trend = data.statistics && data.statistics.trend ? data.statistics.trend : 'stable';
-                trendValue.innerHTML = formatTrendText(trend);
-                const badge = formatTrendBadge(trend);
-                trendBadge.textContent = badge.text;
-                trendBadge.className = badge.className;
-            }
-
-            if (statusValue && statusBadge) {
-                statusValue.textContent = data.status || '—';
-                const badge = getStatusBadge(data.status);
-                statusBadge.className = badge.className;
-                statusBadge.innerHTML = badge.html;
-            }
-
-            if (anomalyWarning) {
-                anomalyWarning.style.display = data.anomaly ? 'block' : 'none';
-            }
-
-            if (minCount) {
-                minCount.textContent = data.statistics && Number.isFinite(data.statistics.min)
-                    ? data.statistics.min
-                    : '—';
-            }
-            if (maxCount) {
-                maxCount.textContent = data.statistics && Number.isFinite(data.statistics.max)
-                    ? data.statistics.max
-                    : '—';
-            }
-
-            if (historyBody) {
-                historyBody.innerHTML = renderHistoryRows(data.history);
-            }
-
-            if (vehicleChart) {
-                updateChart(data.history || []);
-            }
-        }
-
-        async function fetchDashboardData() {
-            try {
-                const response = await fetch('/status');
-                const data = await response.json();
-                updateDashboard(data);
-            } catch (error) {
-                console.error('Unable to refresh dashboard data:', error);
-                const lastUpdated = document.getElementById('lastUpdated');
-                if (lastUpdated) {
-                    lastUpdated.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Update failed`;
-                }
-                const errorAlert = document.getElementById('errorAlert');
-                const errorMessage = document.getElementById('errorMessage');
-                if (errorAlert) {
-                    errorAlert.style.display = 'block';
-                }
-                if (errorMessage) {
-                    errorMessage.textContent = error.message || 'Could not update data.';
-                }
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            const initialHistory = {{ data.history|tojson }} || [];
-            vehicleChart = initChart(initialHistory);
-
-            const cards = document.querySelectorAll('.card');
-            cards.forEach((card, index) => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(20px)';
-                setTimeout(() => {
-                    card.style.transition = 'all 0.6s cubic-bezier(0.23, 1, 0.320, 1)';
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateY(0)';
-                }, index * 100);
-            });
-
-            const cardValues = document.querySelectorAll('.card-value');
-            cardValues.forEach(value => {
-                value.style.transition = 'all 0.5s cubic-bezier(0.23, 1, 0.320, 1)';
-            });
-
-            cards.forEach(card => {
-                card.addEventListener('mouseenter', function() {
-                    this.style.transform = 'translateY(-8px) scale(1.01)';
-                });
-                card.addEventListener('mouseleave', function() {
-                    this.style.transform = 'translateY(0) scale(1)';
-                });
-            });
-
-            setInterval(fetchDashboardData, 5000);
+        
+        const res = await fetch('/api/join', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ name: nameInput.value.trim() })
         });
+        const data = await res.json();
+        myToken = data.token; myName = data.name; myQueueId = data.queue_id;
+        localStorage.setItem('token', myToken);
+        localStorage.setItem('userName', myName);
+        localStorage.setItem('queueId', myQueueId);
+        showQueue();
+    }
 
-        console.log('🎨 Enhanced Dashboard loaded at:', new Date().toLocaleTimeString());
-    </script>
+    function showQueue() {
+        document.getElementById('registration-view').style.display = 'none';
+        document.getElementById('queue-view').style.display = 'block';
+        document.getElementById('my-token').innerText = '#' + myToken;
+        document.getElementById('queue-id-display').innerText = myQueueId;
+        document.getElementById('welcome-msg').innerText = 'Hi, ' + myName + ' 👋';
+        updateStatus();
+        interact('I just joined the queue.');
+        statusInterval = setInterval(updateStatus, 3000);
+    }
+
+    function leaveQueue() {
+        if (confirm('Are you sure? You will lose your spot!')) {
+            localStorage.clear(); location.reload();
+        }
+    }
+
+    function typeEffect(text) {
+        let i = 0;
+        const el = document.getElementById('ai-text');
+        el.innerHTML = '';
+        const timer = setInterval(() => {
+            if (i < text.length) { el.innerHTML += text.charAt(i); i++; }
+            else clearInterval(timer);
+        }, 22);
+    }
+
+    function updateEtaRing(eta) {
+        const arc = document.getElementById('eta-arc');
+        const circumference = 339.3;
+        if (maxEta === null || eta > maxEta) maxEta = eta;
+        const progress = maxEta > 0 ? eta / maxEta : 0;
+        arc.style.strokeDashoffset = circumference * (1 - progress);
+    }
+
+    async function updateStatus() {
+        if (!myToken) return;
+        try {
+            const res = await fetch(`/api/status?token=${myToken}`);
+            const data = await res.json();
+            document.getElementById('current').innerText = data.current;
+            document.getElementById('eta').innerText = data.eta;
+            updateEtaRing(data.eta);
+
+            if (data.discount && data.discount !== shownDiscount) {
+                shownDiscount = data.discount;
+                const banner = document.getElementById('discount-banner');
+                banner.innerHTML = `🎉 ${data.discount}% discount has been applied to your overall order!`;
+                banner.style.display = 'block';
+            }
+
+            if (!goodbyeTriggered && data.current >= parseInt(myToken)) {
+                clearInterval(statusInterval);
+                triggerGoodbye();
+            }
+        } catch (e) { console.log('Update failed'); }
+    }
+
+    async function triggerGoodbye() {
+        goodbyeTriggered = true;
+        document.getElementById('queue-view').style.display = 'none';
+        document.getElementById('registration-view').style.display = 'none';
+        document.getElementById('goodbye-view').style.display = 'block';
+        try {
+            const res = await fetch('/api/goodbye', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ token: myToken })
+            });
+            const data = await res.json();
+            document.getElementById('goodbye-text').innerText = data.text;
+        } catch (e) {
+            document.getElementById('goodbye-text').innerText = "You made it! Go get 'em!";
+        }
+    }
+
+    async function interact(choice) {
+        document.getElementById('ai-options').innerHTML = '<em style="color:var(--sub);font-size:13px">AI is thinking...</em>';
+        try {
+            const res = await fetch('/api/interact', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ choice, token: myToken })
+            });
+            const data = await res.json();
+            typeEffect(data.text);
+            const container = document.getElementById('ai-options');
+            container.innerHTML = '';
+
+            // Inject snake button if rage is high enough
+            if (data.rage_score > 4) {
+                const snakeBtn = document.createElement('button');
+                snakeBtn.className = 'btn';
+                snakeBtn.textContent = '🐍 Play Snake while you wait';
+                snakeBtn.style.cssText = 'font-size:13px;padding:10px;margin:4px 0;background:linear-gradient(135deg,#00b894,#00cec9);';
+                snakeBtn.onclick = launchSnake;
+                container.appendChild(snakeBtn);
+            }
+
+            data.options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'btn';
+                btn.textContent = opt;
+                btn.style.cssText = 'font-size:13px;padding:10px;margin:4px 0;';
+                btn.onclick = () => interact(opt);
+                container.appendChild(btn);
+            });
+        } catch (e) {
+            document.getElementById('ai-text').innerText = 'AI is currently offline.';
+        }
+    }
+
+    // ===================== SNAKE GAME =====================
+    const DISCOUNT_THRESHOLD = 200;
+    let CELL, COLS, ROWS;
+    let snake, dir, nextDir, food, snakeScore, snakeLoop, gameOver;
+
+    function getCanvasSize() {
+        // Fit canvas to card width minus padding, capped at 320px
+        const card = document.querySelector('.card');
+        const available = Math.min(card.clientWidth - 40, 320);
+        // Round down to nearest multiple of 14 cells
+        COLS = 14; ROWS = 14;
+        CELL = Math.floor(available / COLS);
+        return COLS * CELL;
+    }
+
+    function launchSnake() {
+        document.getElementById('queue-view').style.display = 'none';
+        document.getElementById('snake-view').style.display = 'block';
+        const size = getCanvasSize();
+        const canvas = document.getElementById('snake-canvas');
+        canvas.width = size; canvas.height = size;
+        initSnake();
+        reportScore(0, true);
+    }
+
+    function exitSnake() {
+        clearInterval(snakeLoop);
+        reportScore(snakeScore, false);
+        document.getElementById('snake-view').style.display = 'none';
+        document.getElementById('queue-view').style.display = 'block';
+    }
+
+    function initSnake() {
+        snake = [{x:7, y:7},{x:6,y:7},{x:5,y:7}];
+        dir = {x:1, y:0}; nextDir = {x:1, y:0};
+        snakeScore = 0; gameOver = false;
+        document.getElementById('snake-score').textContent = '0';
+        document.getElementById('snake-msg').textContent = 'Use arrow keys or buttons · Score 200 for a discount!';
+        updateThresholdBar(0);
+        placeFood();
+        clearInterval(snakeLoop);
+        snakeLoop = setInterval(stepSnake, 130);
+        drawSnake();
+    }
+
+    function placeFood() {
+        let pos;
+        do { pos = {x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS)}; }
+        while (snake.some(s => s.x===pos.x && s.y===pos.y));
+        food = pos;
+    }
+
+    function snakeDir(dx, dy) {
+        // Prevent reversing
+        if (dx !== 0 && dir.x !== 0) return;
+        if (dy !== 0 && dir.y !== 0) return;
+        nextDir = {x: dx, y: dy};
+    }
+
+    function stepSnake() {
+        if (gameOver) return;
+        dir = nextDir;
+        const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+
+        // Wall collision
+        if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) { endSnake(); return; }
+        // Self collision
+        if (snake.some(s => s.x===head.x && s.y===head.y)) { endSnake(); return; }
+
+        snake.unshift(head);
+        if (head.x === food.x && head.y === food.y) {
+            snakeScore += 5;
+            document.getElementById('snake-score').textContent = snakeScore;
+            updateThresholdBar(snakeScore);
+            reportScore(snakeScore, true);
+            placeFood();
+            // Speed up slightly every 50 pts
+            if (snakeScore % 50 === 0) {
+                clearInterval(snakeLoop);
+                const speed = Math.max(60, 130 - Math.floor(snakeScore/50)*10);
+                snakeLoop = setInterval(stepSnake, speed);
+            }
+        } else {
+            snake.pop();
+        }
+        drawSnake();
+    }
+
+    function endSnake() {
+        gameOver = true;
+        clearInterval(snakeLoop);
+        reportScore(snakeScore, false);
+        const msg = document.getElementById('snake-msg');
+        if (snakeScore >= DISCOUNT_THRESHOLD) {
+            msg.innerHTML = '🎉 You scored ' + snakeScore + '! Discount unlocked — check below!';
+            msg.style.color = 'var(--primary)';
+        } else {
+            msg.textContent = 'Game over! Score: ' + snakeScore + ' · Tap to restart';
+            msg.style.color = 'var(--sub)';
+        }
+        // Tap canvas to restart
+        document.getElementById('snake-canvas').onclick = () => {
+            document.getElementById('snake-canvas').onclick = null;
+            initSnake();
+        };
+        drawSnake(true);
+    }
+
+    function drawSnake(isOver = false) {
+        const canvas = document.getElementById('snake-canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#0a0a0a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Grid dots
+        ctx.fillStyle = 'rgba(255,255,255,0.03)';
+        for (let x=0; x<COLS; x++) for (let y=0; y<ROWS; y++) {
+            ctx.fillRect(x*CELL+CELL/2-1, y*CELL+CELL/2-1, 2, 2);
+        }
+
+        // Food
+        ctx.fillStyle = '#fd79a8';
+        ctx.shadowColor = '#fd79a8'; ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(food.x*CELL+CELL/2, food.y*CELL+CELL/2, CELL/2-2, 0, Math.PI*2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Snake
+        snake.forEach((seg, i) => {
+            const ratio = 1 - i/snake.length;
+            ctx.fillStyle = isOver ? '#636e72' : `rgba(${57+ratio*100},${211-ratio*50},${83+ratio*100},${0.6+ratio*0.4})`;
+            ctx.shadowColor = i===0 ? 'var(--primary)' : 'transparent';
+            ctx.shadowBlur = i===0 ? 8 : 0;
+            const pad = i===0 ? 1 : 2;
+            ctx.beginPath();
+            ctx.roundRect(seg.x*CELL+pad, seg.y*CELL+pad, CELL-pad*2, CELL-pad*2, 4);
+            ctx.fill();
+        });
+        ctx.shadowBlur = 0;
+
+        if (isOver) {
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.fillRect(0,0,canvas.width,canvas.height);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 18px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2 - 10);
+            ctx.font = '13px Inter, sans-serif';
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.fillText('Tap to play again', canvas.width/2, canvas.height/2 + 14);
+        }
+    }
+
+    function updateThresholdBar(score) {
+        const pct = Math.min(100, Math.round(score / DISCOUNT_THRESHOLD * 100));
+        document.getElementById('threshold-fill').style.width = pct + '%';
+        document.getElementById('threshold-pct').textContent = pct + '%';
+    }
+
+    async function reportScore(score, playing) {
+        try {
+            const res = await fetch('/api/game_score', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ token: myToken, score, playing })
+            });
+            const data = await res.json();
+            // Check if discount was auto-applied
+            if (score >= data.discount_threshold) {
+                shownDiscount = null; // force re-show on next status poll
+            }
+        } catch(e) {}
+    }
+
+    // Keyboard controls
+    document.addEventListener('keydown', e => {
+        if (document.getElementById('snake-view').style.display === 'none') return;
+        const map = { ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0] };
+        if (map[e.key]) { e.preventDefault(); snakeDir(...map[e.key]); }
+    });
+
+    // Swipe controls for mobile
+    let touchStartX = 0, touchStartY = 0;
+    document.addEventListener('touchstart', e => {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    document.addEventListener('touchmove', e => {
+        if (document.getElementById('snake-view').style.display !== 'none') e.preventDefault();
+    }, { passive: false });
+    document.addEventListener('touchend', e => {
+        if (document.getElementById('snake-view').style.display === 'none') return;
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return; // too short
+        if (Math.abs(dx) > Math.abs(dy)) snakeDir(dx > 0 ? 1 : -1, 0);
+        else snakeDir(0, dy > 0 ? 1 : -1);
+    }, { passive: true });
+</script>
 </body>
 </html>
